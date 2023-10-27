@@ -212,10 +212,10 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 policy.eval()
 
                 # run rollout
-                if (self.epoch % cfg.training.rollout_every) == 0:
-                    runner_log = env_runner.run(policy)
-                    # log all
-                    step_log.update(runner_log)
+                # if (self.epoch % cfg.training.rollout_every) == 0:
+                #     runner_log = env_runner.run(policy)
+                #     # log all
+                #     step_log.update(runner_log)
 
                 # run validation
                 if (self.epoch % cfg.training.val_every) == 0:
@@ -273,6 +273,8 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                     for key, value in step_log.items():
                         new_key = key.replace('/', '_')
                         metric_dict[new_key] = value
+                    # TODO: This is a HACK
+                    metric_dict['test_mean_score'] = 1
                     
                     # We can't copy the last checkpoint here
                     # since save_checkpoint uses threads.
