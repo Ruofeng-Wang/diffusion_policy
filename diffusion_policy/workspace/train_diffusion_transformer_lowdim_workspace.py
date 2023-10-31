@@ -212,10 +212,10 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 policy.eval()
 
                 # run rollout
-                # if (self.epoch % cfg.training.rollout_every) == 0:
-                #     runner_log = env_runner.run(policy)
-                #     # log all
-                #     step_log.update(runner_log)
+                if (self.epoch % cfg.training.rollout_every) == 0:
+                    runner_log = env_runner.run(policy)
+                    # log all
+                    step_log.update(runner_log)
 
                 # run validation
                 if (self.epoch % cfg.training.val_every) == 0:

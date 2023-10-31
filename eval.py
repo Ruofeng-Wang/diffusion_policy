@@ -8,6 +8,8 @@ import sys
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
 
+from isaacgym.torch_utils import *
+
 import os
 import pathlib
 import click
@@ -16,6 +18,8 @@ import torch
 import dill
 import wandb
 import json
+from omegaconf import OmegaConf
+
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 
 @click.command()
@@ -30,6 +34,15 @@ def main(checkpoint, output_dir, device):
     # load checkpoint
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
+    action_steps = 4
+    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_isaac_runner.IsaacHumanoidRunner'
+    cfg['n_action_steps'] = action_steps
+    cfg['task']['env_runner']['n_action_steps'] = action_steps
+    cfg['policy']['n_action_steps'] = action_steps
+    OmegaConf.set_struct(cfg, False)
+
+    cfg.task.env_runner['device'] = device
+    
     cls = hydra.utils.get_class(cfg._target_)
     workspace = cls(cfg, output_dir=output_dir)
     workspace: BaseWorkspace
