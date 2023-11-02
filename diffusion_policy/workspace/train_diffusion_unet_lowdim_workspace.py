@@ -227,7 +227,7 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                 if (self.epoch % cfg.training.rollout_every) == 0:
                     with torch.no_grad():
                         # sample trajectory from training set, and evaluate difference
-                        env_runner.run(policy)
+                        filename = env_runner.run(policy)
                         
                         # dataset = hydra.utils.instantiate(cfg.task.eval_dataset)
                         # assert isinstance(dataset, BaseLowdimDataset)
@@ -236,7 +236,7 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                         # for batch_idx, batch in enumerate(eval_dataloader):
                         
                         batch = {}
-                        with zarr.open('recorded_data_eval_2.zarr') as dataset:
+                        with zarr.open(filename) as dataset:
                             obs = dataset.data.state
                             latents = dataset.data.ase_latent
                             actions = dataset.data.action
@@ -273,7 +273,7 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                             del pred_action
                             del mse
                         del dataset
-                        shutil.rmtree('recorded_data_eval_2.zarr')
+                        shutil.rmtree(filename)
 
                 # run validation
                 if (self.epoch % cfg.training.val_every) == 0:
