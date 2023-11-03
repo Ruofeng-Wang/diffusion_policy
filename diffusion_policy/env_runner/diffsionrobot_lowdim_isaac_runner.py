@@ -52,12 +52,13 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         self.save_zarr = True
         
         if self.save_zarr:
-            cfg['env']['numEnvs']=4
-            args.num_envs=1
-            args.rl_device = 'cpu'
-            args.device = 'cpu'
-            args.use_gpu_pipeline = False
-            args.use_gpu = False
+            self.num_envs=1
+            cfg['env']['numEnvs']=self.num_envs
+            args.num_envs=self.num_envs
+            # args.rl_device = 'cpu'
+            # args.device = 'cpu'
+            # args.use_gpu_pipeline = False
+            # args.use_gpu = False
         else: # placeholder
             cfg['env']['numEnvs']=1
             args.num_envs=1
@@ -117,7 +118,8 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             if generate_data:
                 zroot = zarr.open_group("recorded_data{}.zarr".format(time.strftime("%H-%M-%S", time.localtime())), "w")
             else:
-                zroot = zarr.open_group("recorded_data_eval.zarr", "w")
+                file_name = "recorded_data{}_eval.zarr".format(time.strftime("%H-%M-%S", time.localtime()))
+                zroot = zarr.open_group(file_name, "w")
             
             zroot.create_group("data")
             zdata = zroot["data"]
@@ -173,10 +175,11 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     action = expert_action[:,None,:]
                 
             if save_zarr:
-                curr_idx = np.all(recorded_acs_episode == 0, axis=-1).argmax(axis=-1)
-                recorded_obs_episode[:,curr_idx,:] = single_obs_dict['obs'].to("cpu").detach().numpy()
-                recorded_acs_episode[:,curr_idx+1,:] = expert_action.to("cpu").detach().numpy()
-                recorded_latent_episode[:,curr_idx,:] = self.player._ase_latents.to("cpu").detach().numpy()
+                curr_idx = np.all(recorded_latent_episode == 0, axis=-1).argmax(axis=-1)
+                recorded_obs_episode[np.arange(env.num_envs),curr_idx,:] = single_obs_dict['obs'].to("cpu").detach().numpy()
+                recorded_acs_episode[np.arange(env.num_envs),curr_idx,:] = expert_action.to("cpu").detach().numpy()
+                recorded_latent_episode[np.arange(env.num_envs),curr_idx,:] = self.player._ase_latents.to("cpu").detach().numpy()[:,:]
+
 
             # step env
             self.n_action_steps = action.shape[1]
@@ -196,7 +199,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             env_ids = torch.nonzero(done, as_tuple=False).squeeze(1).int()
             # print("env_ids: ", env_ids)
             if len(env_ids) > 0:
-                self.player.env_reset(env_ids)
+                # self.player.env_reset(env_ids)
                 obs = env.reset(env_ids)
                 # state_history[env_ids,:,:] = obs_2[env_ids,None,:]
                 state_history[env_ids,:,-253:] = obs[env_ids].to(state_history.device)[:,None,:]
@@ -206,12 +209,12 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                 # flush saved data
                 if save_zarr:
                     for i in range(len(env_ids)):
-                        epi_len = np.all(recorded_acs_episode[env_ids[i]] == 0, axis=-1).argmax(axis=-1)
+                        epi_len = np.all(recorded_obs_episode[env_ids[i]] == 0, axis=-1).argmax(axis=-1)
                         if epi_len == 0:
                             epi_len = recorded_acs_episode.shape[1]
-                        recorded_obs.append(recorded_obs_episode[env_ids[i]])
-                        recorded_acs.append(recorded_acs_episode[env_ids[i]])
-                        recorded_latent.append(recorded_latent_episode[env_ids[i]])
+                        recorded_obs.append(np.copy(recorded_obs_episode[env_ids[i], :epi_len]))
+                        recorded_acs.append(np.copy(recorded_acs_episode[env_ids[i], :epi_len]))
+                        recorded_latent.append(np.copy(recorded_latent_episode[env_ids[i], :epi_len]))
                         recorded_obs_episode[env_ids[i]] = 0
                         recorded_acs_episode[env_ids[i]] = 0
                         recorded_latent_episode[env_ids[i]] = 0
@@ -227,7 +230,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             if online:
                 pbar.update(action.shape[1])
             else:
-                pbar.update(4)
+                pbar.update(self.num_envs)
             
             
             if save_zarr and saved_idx >= len_to_save:
@@ -256,5 +259,40 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         log_data['eval_action_error'] = torch.mean(torch.tensor(action_error))
         print("eval_action_error: ", log_data['eval_action_error'])
 
-        return log_data
+        with torch.no_grad():
+            batch = {}
+            dataset = zarr.open(file_name, "r")
+            # sample trajectory from training set, and evaluate difference
+            obs = dataset.data.state
+            latents = dataset.data.ase_latent
+            actions = dataset.data.action
+            episode_indices = np.concatenate([np.array([np.arange(i, i + policy.horizon) for i in range(j*100, j*100+20)]) for j in range(1)])
+            episode_indices = episode_indices.flatten()
+            obs = obs[episode_indices].reshape(-1, policy.horizon, obs.shape[-1])
+            latents = latents[episode_indices].reshape(-1, policy.horizon, latents.shape[-1])
+            actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
+            
+            batch['obs'] = np.concatenate([latents, obs], axis=-1)
+            batch['action'] = actions
+            batch = dict_apply(batch, torch.from_numpy)
+            batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+            obs_dict = {'obs': batch['obs']}
+            gt_action = batch['action']
+            
+            result = policy.predict_action(obs_dict)
+
+            pred_action = result['action_pred']
+            mse = torch.nn.functional.mse_loss(pred_action, gt_action)
+            
+            print("eval mse: ", mse.item(), np.sqrt(mse.item()))
+            # release RAM
+            del batch
+            del obs_dict
+            del gt_action
+            del result
+            del pred_action
+            del mse
+
+
+        return file_name
 
