@@ -21,6 +21,8 @@ import zarr, time
 
 from ase import run
 from ase.run import create_rlgpu_env_cfg, build_alg_runner, RLGPUAlgoObserver
+from ase.learning.ase_players import ASEPlayer
+from ase.env.tasks.vec_task_wrappers import VecTaskPythonWrapper
 
 class IsaacHumanoidRunner(BaseLowdimRunner):
     def __init__(self,
@@ -47,22 +49,22 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         ):
         super().__init__(output_dir)
         
-        args, cfg, cfg_train = torch.load('nominal_cfg.pt')
+        args, cfg, cfg_train = torch.load("nominal_cfg.pt")
         
         self.save_zarr = True
         
         if self.save_zarr:
-            cfg['env']['numEnvs']=1
-            args.num_envs=1
-            args.rl_device = 'cpu'
-            args.device = 'cpu'
+            cfg["env"]["numEnvs"] = 1
+            args.num_envs = 1
+            args.rl_device = "cpu"
+            args.device = "cpu"
             args.use_gpu_pipeline = False
             args.use_gpu = False
         else: # placeholder
-            cfg['env']['numEnvs']=1
-            args.num_envs=1
-            args.rl_device = 'cpu'
-            args.device = 'cpu'
+            cfg["env"]["numEnvs"] = 1
+            args.num_envs = 1
+            args.rl_device = "cpu"
+            args.device = "cpu"
             args.use_gpu_pipeline = False
             args.use_gpu = False
                 
@@ -75,9 +77,11 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         runner.load(cfg_train)
         runner.reset()
         player = runner.run(vars(args))
+        
+        # breakpoint()
 
-        self.player = player
-        self.env = player.env
+        self.player: ASEPlayer = player
+        self.env: VecTaskPythonWrapper = player.env
         self.fps = fps
         self.crf = crf
         self.n_obs_steps = n_obs_steps
@@ -105,10 +109,10 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         action_history = torch.zeros((env.num_envs, history, env.num_actions), dtype=torch.float32, device=device)
         
         # state_history[:,:,:] = obs[:,None,:]
-        state_history[:,:,:] = torch.cat([self.player._ase_latents.to(device), obs.to(device)], dim=-1) [:,None,:] # (env.num_envs, 1, env.num_observations)
+        state_history[:,:,:] = torch.cat([self.player._ase_latents.to(device), obs.to(device)], dim=-1)[:, None, :] # (env.num_envs, 1, env.num_observations)
         
-        obs_dict = {'obs': state_history[:,:]} #, 'past_action': action_history}
-        single_obs_dict = {'obs': state_history[:,-1, -253:].to('cuda:0')} #, 'past_action': action_history[0]}
+        obs_dict = {"obs": state_history[:, :]} #, 'past_action': action_history}
+        single_obs_dict = {"obs": state_history[:, -1, -253:].to("cuda:0")} #, 'past_action': action_history[0]}
         
         
         save_zarr = generate_data or (not online)
@@ -156,29 +160,29 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     
                     
                     # list in isaac: [3,12,16,18,17,19,21,1,4,7,2,5,8]
-                    idx_isaac = [3,12,17,19,21,16,18,2,5,8,1,4,7]
-                    # list of dof: [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33, 35, 36, 37]
-                    idx_dof = [0, 1,  2,  3,  4,  5,  6,  7,  8,  9, 12, 13, 14, 15, 16, 17, 18,     21, 22, 23, 25, 27, 28,29, 30, 31, 32, 34, 36, 37, 38]
-                    # Your theta values: a numpy array of shape (192, 24, 3)
-                    thetas = np.load('thetas.npy', allow_pickle=True)  # Load your thetas
-                    thetas = torch.tensor(thetas, dtype=torch.float32)
-                    thetas[0,:,[16,17]] += thetas[0,:,[13,14]]
-                    thetas = thetas[0,:,idx_isaac]
-                    old_thetas = torch.clone(thetas)
-                    thetas = torch.clone(thetas)
-                    thetas[...,0] = old_thetas[...,1]
-                    thetas[...,1] = old_thetas[...,0]
-                    thetas[...,2] = old_thetas[...,2]
-                    thetas[:,[2,5],0] *= -1
-                    thetas[:,[2,5],2] *= -1
-                    # thetas[:,[3,6],1] *= -1
-                    thetas = thetas.view(thetas.shape[0], -1)  
-                    thetas = thetas[:,idx_dof] * torch.pi / 180.0
+                    # idx_isaac = [3,12,17,19,21,16,18,2,5,8,1,4,7]
+                    # # list of dof: [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33, 35, 36, 37]
+                    # idx_dof = [0, 1,  2,  3,  4,  5,  6,  7,  8,  9, 12, 13, 14, 15, 16, 17, 18,     21, 22, 23, 25, 27, 28,29, 30, 31, 32, 34, 36, 37, 38]
+                    # # Your theta values: a numpy array of shape (192, 24, 3)
+                    # thetas = np.load("thetas.npy", allow_pickle=True)  # Load your thetas
+                    # thetas = torch.tensor(thetas, dtype=torch.float32)
+                    # thetas[0, :, [16,17]] += thetas[0, :, [13,14]]
+                    # thetas = thetas[0,:,idx_isaac]
+                    # old_thetas = torch.clone(thetas)
+                    # thetas = torch.clone(thetas)
+                    # thetas[..., 0] = old_thetas[..., 1]
+                    # thetas[..., 1] = old_thetas[..., 0]
+                    # thetas[..., 2] = old_thetas[..., 2]
+                    # thetas[:, [2, 5], 0] *= -1
+                    # thetas[:, [2, 5], 2] *= -1
+                    # # thetas[:,[3,6],1] *= -1
+                    # thetas = thetas.view(thetas.shape[0], -1)  
+                    # thetas = thetas[:, idx_dof] * torch.pi / 180.0
                     
                     
                     
                 # if idx > 10:
-                    obs_dict = {'obs': state_history[:,-4:,:]}
+                    obs_dict = {"obs": state_history[:, -4:, :]}
                     # obs_dict['obs'][:,-1,:-253] = torch.tensor([ 0.0378,  0.0338,  0.0726, -0.0593, -0.1044,  0.1489, -0.0006, -0.1080,
                     # 0.2047, -0.1283,  0.0318,  0.0232, -0.3094,  0.1823,  0.0721,  0.2027,
                     # -0.0547, -0.2114, -0.0986, -0.3038, -0.0201, -0.0805,  0.1522,  0.0325,
@@ -195,10 +199,13 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     # action_dict = policy.predict_action_half(obs_dict, thetas[idx:idx+policy.horizon])
                     
                     # use TF
+                    t1 = time.perf_counter()
                     action_dict = policy.predict_action(obs_dict)
+                    t2 = time.perf_counter()
+                    print("freq: ", 1/(t2-t1))
                     
-                    if idx >= thetas.shape[0] - policy.horizon:
-                        idx = 0
+                    # if idx >= thetas.shape[0] - policy.horizon:
+                    #     idx = 0
                     # obs_dict_2 = {'obs': torch.cat([
                     #     torch.from_numpy(recorded_latent_episode[0:1]).to('cuda:0'), 
                     #     torch.from_numpy(recorded_obs_episode[0:1]).to('cuda:0')], dim=-1)[:,idx-history:idx,:]}
@@ -213,15 +220,15 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     # print('action diff: ', torch.mean(torch.sqrt((expert_action[0] - pred_action[0,history]) ** 2)))
                     # action_error.append(torch.mean(torch.sqrt((expert_action[0] - pred_action[0,history]) ** 2)).item())
                     
-                    pred_action = action_dict['action_pred']
-                    action = pred_action[:,history:history+3,:]
+                    pred_action = action_dict["action_pred"]
+                    action = pred_action[:,history:history+10,:]
                     # action = expert_action[:,None,:]
                 else:
-                    action = expert_action[:,None,:]
+                    action = expert_action[:, None, :]
             if save_zarr:
                 curr_idx = np.all(recorded_latent_episode == 0, axis=-1).argmax(axis=-1)
                 # curr_idx = idx
-                recorded_obs_episode[np.arange(env.num_envs),curr_idx,:] = single_obs_dict['obs'].to("cpu").detach().numpy()
+                recorded_obs_episode[np.arange(env.num_envs),curr_idx,:] = single_obs_dict["obs"].to("cpu").detach().numpy()
                 recorded_acs_episode[np.arange(env.num_envs),curr_idx+1,:] = expert_action.to("cpu").detach().numpy()
                 recorded_latent_episode[np.arange(env.num_envs),curr_idx,:] = self.player._ase_latents.to("cpu").detach().numpy()[:,:]
                 
@@ -230,16 +237,16 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             # step env
             self.n_action_steps = action.shape[1]
             for i in range(self.n_action_steps):
-                action_step = action[:,i,:]
+                action_step = action[:, i, :]
                 obs, reward, done, info = env.step(action_step)
             
                 state_history = torch.roll(state_history, shifts=-1, dims=1)
                 action_history = torch.roll(action_history, shifts=-1, dims=1)
-                state_history[:,-1,-253:] = obs
-                state_history[:,-1,:-253] = self.player._ase_latents
+                state_history[:, -1, -253:] = obs
+                state_history[:, -1, :-253] = self.player._ase_latents
                 
-                action_history[:,-1,:] = action_step
-                single_obs_dict = {'obs': state_history[:,-1,-253:].to('cuda:0')}
+                action_history[:, -1, :] = action_step
+                single_obs_dict = {"obs": state_history[:, -1, -253:].to("cuda:0")}
             
                 idx += 1
             # reset env
@@ -316,17 +323,17 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             latents = latents[episode_indices].reshape(-1, policy.horizon, latents.shape[-1])
             actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
             
-            batch['obs'] = np.concatenate([latents, obs], axis=-1)
-            # batch['obs'] = obs
-            batch['action'] = actions
+            batch["obs"] = np.concatenate([latents, obs], axis=-1)
+            # batch["obs"] = obs
+            batch["action"] = actions
             batch = dict_apply(batch, torch.from_numpy)
             batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
-            obs_dict = {'obs': batch['obs']}
-            gt_action = batch['action']
+            obs_dict = {"obs": batch["obs"]}
+            gt_action = batch["action"]
             
             result = policy.predict_action(obs_dict)
 
-            pred_action = result['action_pred']
+            pred_action = result["action_pred"]
             mse = torch.nn.functional.mse_loss(pred_action, gt_action)
             
             print("eval mse: ", mse.item(), np.sqrt(mse.item()))
@@ -341,8 +348,8 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
 
         # log
         log_data = dict()
-        log_data['eval_action_error'] = torch.mean(torch.tensor(action_error))
-        print("eval_action_error: ", log_data['eval_action_error'])
+        log_data["eval_action_error"] = torch.mean(torch.tensor(action_error))
+        print("eval_action_error: ", log_data["eval_action_error"])
 
         return log_data
 

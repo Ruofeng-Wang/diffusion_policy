@@ -49,7 +49,7 @@ class DiffusionTransformerLowdimPolicy(BaseLowdimPolicy):
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
-        self.num_inference_steps = num_inference_steps
+        self.num_inference_steps = 20
     
     # ========= inference  ============
     def conditional_sample(self, 
@@ -70,6 +70,7 @@ class DiffusionTransformerLowdimPolicy(BaseLowdimPolicy):
         # set step values
         scheduler.set_timesteps(self.num_inference_steps)
 
+        # print(scheduler.timesteps)
         for t in scheduler.timesteps:
             # 1. apply conditioning
             trajectory[condition_mask] = condition_data[condition_mask]

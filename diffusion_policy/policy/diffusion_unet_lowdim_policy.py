@@ -54,6 +54,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
+        breakpoint()
     
     # ========= inference  ============
     def conditional_sample(self, 

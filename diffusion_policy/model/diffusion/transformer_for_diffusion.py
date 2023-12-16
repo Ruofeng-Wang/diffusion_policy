@@ -110,6 +110,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
                 num_layers=n_layer
             )
 
+
         # attention mask
         if causal_attn:
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -277,6 +278,10 @@ class TransformerForDiffusion(ModuleAttrMixin):
         cond: (B,T',cond_dim)
         output: (B,T,input_dim)
         """
+        
+        # import time
+        # _time_cnt = time.perf_counter()
+        
         # 1. time
         timesteps = timestep
         if not torch.is_tensor(timesteps):
@@ -288,6 +293,9 @@ class TransformerForDiffusion(ModuleAttrMixin):
         timesteps = timesteps.expand(sample.shape[0])
         time_emb = self.time_emb(timesteps).unsqueeze(1)
         # (B,1,n_emb)
+        
+        # print(time.perf_counter() - _time_cnt)
+        # _time_cnt = time.perf_counter()
 
         # process input
         input_emb = self.input_emb(sample)
@@ -337,10 +345,17 @@ class TransformerForDiffusion(ModuleAttrMixin):
             )
             # (B,T,n_emb)
         
+        # print(time.perf_counter() - _time_cnt)
+        # _time_cnt = time.perf_counter()
+        
         # head
         x = self.ln_f(x)
         x = self.head(x)
         # (B,T,n_out)
+        
+        # print(time.perf_counter() - _time_cnt)
+        # _time_cnt = time.perf_counter()
+        
         return x
 
 
