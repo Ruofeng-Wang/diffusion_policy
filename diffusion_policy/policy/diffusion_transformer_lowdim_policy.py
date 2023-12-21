@@ -49,12 +49,12 @@ class DiffusionTransformerLowdimPolicy(BaseLowdimPolicy):
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
-        self.num_inference_steps = 20
+        self.num_inference_steps = 2
     
     # ========= inference  ============
     def conditional_sample(self, 
             condition_data, condition_mask,
-            cond=None, generator=None,
+            cond=None, generator=None, action_init=None, action_init_mask=None,
             # keyword arguments to scheduler.step
             **kwargs
             ):
@@ -66,6 +66,9 @@ class DiffusionTransformerLowdimPolicy(BaseLowdimPolicy):
             dtype=condition_data.dtype,
             device=condition_data.device,
             generator=generator)
+        
+        if action_init is not None:
+            trajectory[action_init_mask] = action_init.view(-1)
     
         # set step values
         scheduler.set_timesteps(self.num_inference_steps)
@@ -159,6 +162,81 @@ class DiffusionTransformerLowdimPolicy(BaseLowdimPolicy):
             result['action_obs_pred'] = action_obs_pred
             result['obs_pred'] = obs_pred
         return result
+    
+    def predict_action_init(self, obs_dict: Dict[str, torch.Tensor], action_init) -> Dict[str, torch.Tensor]:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+
+        assert 'obs' in obs_dict
+        assert 'past_action' not in obs_dict # not implemented yet
+        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
+        B, _, Do = nobs.shape
+        To = self.n_obs_steps
+        assert Do == self.obs_dim
+        T = self.horizon
+        Da = self.action_dim
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        cond = None
+        cond_data = None
+        cond_mask = None
+        if self.obs_as_cond:
+            cond = nobs[:,:To]
+            shape = (B, T, Da)
+            if self.pred_action_steps_only:
+                shape = (B, self.n_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            action_init = self.normalizer['action'].normalize(action_init)
+            action_init_mask = torch.zeros_like(cond_mask, dtype=torch.bool)
+            action_init_mask[:,:10,:] = True
+        else:
+            # condition through impainting
+            shape = (B, T, Da+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs[:,:To]
+            cond_mask[:,:To,Da:] = True
+
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            cond=cond,
+            action_init=action_init,
+            action_init_mask=action_init_mask,
+            **self.kwargs)
+        
+        # unnormalize prediction
+        naction_pred = nsample[...,:Da]
+        action_pred = self.normalizer['action'].unnormalize(naction_pred)
+
+        # get action
+        if self.pred_action_steps_only:
+            action = action_pred
+        else:
+            start = To - 1
+            end = start + self.n_action_steps
+            action = action_pred[:,start:end]
+        
+        result = {
+            'action': action,
+            'action_pred': action_pred
+        }
+        if not self.obs_as_cond:
+            nobs_pred = nsample[...,Da:]
+            obs_pred = self.normalizer['obs'].unnormalize(nobs_pred)
+            action_obs_pred = obs_pred[:,start:end]
+            result['action_obs_pred'] = action_obs_pred
+            result['obs_pred'] = obs_pred
+        return result
+    
 
     # ========= training  ============
     def set_normalizer(self, normalizer: LinearNormalizer):

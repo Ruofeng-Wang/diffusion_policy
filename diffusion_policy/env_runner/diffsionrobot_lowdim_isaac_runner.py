@@ -105,8 +105,8 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         done = False
         
         history = self.n_obs_steps
-        state_history = torch.zeros((env.num_envs, history+1, env.num_obs + 64), dtype=torch.float32, device=device)
-        action_history = torch.zeros((env.num_envs, history, env.num_actions), dtype=torch.float32, device=device)
+        state_history = torch.zeros((env.num_envs, history*2+1, env.num_obs + 64), dtype=torch.float32, device=device)
+        action_history = torch.zeros((env.num_envs, history*2, env.num_actions), dtype=torch.float32, device=device)
         
         # state_history[:,:,:] = obs[:,None,:]
         state_history[:,:,:] = torch.cat([self.player._ase_latents.to(device), obs.to(device)], dim=-1)[:, None, :] # (env.num_envs, 1, env.num_observations)
@@ -182,7 +182,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     
                     
                 # if idx > 10:
-                    obs_dict = {"obs": state_history[:, -4:, :]}
+                    obs_dict = {"obs": state_history[:, -5:-1, :]}
                     # obs_dict['obs'][:,-1,:-253] = torch.tensor([ 0.0378,  0.0338,  0.0726, -0.0593, -0.1044,  0.1489, -0.0006, -0.1080,
                     # 0.2047, -0.1283,  0.0318,  0.0232, -0.3094,  0.1823,  0.0721,  0.2027,
                     # -0.0547, -0.2114, -0.0986, -0.3038, -0.0201, -0.0805,  0.1522,  0.0325,
@@ -199,10 +199,20 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     # action_dict = policy.predict_action_half(obs_dict, thetas[idx:idx+policy.horizon])
                     
                     # use TF
-                    t1 = time.perf_counter()
-                    action_dict = policy.predict_action(obs_dict)
-                    t2 = time.perf_counter()
-                    print("freq: ", 1/(t2-t1))
+                    # t1 = time.perf_counter()
+                    # action_dict = policy.predict_action(obs_dict)
+                    # t2 = time.perf_counter()
+                    # print("freq: ", 1/(t2-t1))
+                    
+                    try:
+                        action_dict = policy.predict_action_init(obs_dict, action_dict["action_pred"][:,8:12,:])
+                    except Exception as e:
+                        print(e)
+                        obs_dict = {"obs": state_history[:, -9:-5, :]}
+                        action_dict = policy.predict_action(obs_dict)
+                        
+                    # obs_dict = {"obs": state_history[:, -5:-1, :]}
+                    # action_dict = policy.predict_action_init(obs_dict, action_dict["action_pred"][:,4:,:])
                     
                     # if idx >= thetas.shape[0] - policy.horizon:
                     #     idx = 0
@@ -221,7 +231,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                     # action_error.append(torch.mean(torch.sqrt((expert_action[0] - pred_action[0,history]) ** 2)).item())
                     
                     pred_action = action_dict["action_pred"]
-                    action = pred_action[:,history:history+10,:]
+                    action = pred_action[:,history:history+6,:]
                     # action = expert_action[:,None,:]
                 else:
                     action = expert_action[:, None, :]

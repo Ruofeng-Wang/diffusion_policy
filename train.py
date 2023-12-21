@@ -9,6 +9,7 @@ import sys
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
 
+from isaacgym.torch_utils import *
 import torch
 torch.set_float32_matmul_precision('medium')
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -16,7 +17,6 @@ torch.backends.cuda.matmul.allow_tf32 = True
 import hydra
 from omegaconf import OmegaConf
 import pathlib
-from isaacgym.torch_utils import *
 
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 

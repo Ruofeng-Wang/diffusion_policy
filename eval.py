@@ -27,20 +27,21 @@ from diffusion_policy.workspace.base_workspace import BaseWorkspace
 @click.option("-o", "--output_dir", required=True)
 @click.option("-d", "--device", default="cuda:0")
 def main(checkpoint, output_dir, device):
-    if os.path.exists(output_dir):
-        click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
+    # HACK: comment out this for now
+    # if os.path.exists(output_dir):
+    #     click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
     
     # load checkpoint
     payload = torch.load(open(checkpoint, "rb"), pickle_module=dill)
     cfg = payload["cfg"]
     
-    cfg["task"]["env_runner"]["_target_"] = "diffusion_policy.env_runner.diffsionrobot_lowdim_isaac_runner.IsaacHumanoidRunner"
+    cfg["task"]["env_runner"]["_target_"] = "diffusion_policy.env_runner.diffsionrobot_lowdim_legged_runner.LeggedRunner"
     
-    action_steps = 4
-    cfg["n_action_steps"] = action_steps
-    cfg["task"]["env_runner"]["n_action_steps"] = action_steps
-    cfg["policy"]["n_action_steps"] = action_steps
+    # action_steps = 4
+    # cfg["n_action_steps"] = action_steps
+    # cfg["task"]["env_runner"]["n_action_steps"] = action_steps
+    # cfg["policy"]["n_action_steps"] = action_steps
     
     OmegaConf.set_struct(cfg, False)
 
