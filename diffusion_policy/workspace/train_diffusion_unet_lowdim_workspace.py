@@ -237,16 +237,19 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                         
                         batch = {}
                         with zarr.open(filename) as dataset:
-                            obs = dataset.data.state
-                            latents = dataset.data.ase_latent
-                            actions = dataset.data.action
+                            # obs = dataset.data.state
+                            # latents = dataset.data.ase_latent
+                            # actions = dataset.data.action
+                            obs = np.array(dataset.data.state)
+                            actions = np.array(dataset.data.action)
                             episode_indices = np.concatenate([np.array([np.arange(i, i + policy.horizon) for i in range(j*100, j*100+20)]) for j in range(12)])
                             episode_indices = episode_indices.flatten()
                             obs = obs[episode_indices].reshape(-1, policy.horizon, obs.shape[-1])
-                            latents = latents[episode_indices].reshape(-1, policy.horizon, latents.shape[-1])
+                            # latents = latents[episode_indices].reshape(-1, policy.horizon, latents.shape[-1])
                             actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
                             
-                            batch['obs'] = np.concatenate([latents, obs], axis=-1)
+                            # batch['obs'] = np.concatenate([latents, obs], axis=-1)
+                            batch['obs'] = obs
                             batch['action'] = actions
                             batch = dict_apply(batch, torch.from_numpy)
                             batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))

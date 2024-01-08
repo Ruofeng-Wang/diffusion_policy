@@ -1,5 +1,5 @@
 _target_: diffusion_policy.workspace.train_diffusion_unet_lowdim_workspace.TrainDiffusionUnetLowdimWorkspace
-action_dim: 12
+action_dim: 31
 checkpoint:
   save_last_ckpt: true
   save_last_snapshot: false
@@ -9,7 +9,7 @@ checkpoint:
     mode: max
     monitor_key: test_mean_score
 dataloader:
-  batch_size: 4096
+  batch_size: 16384
   num_workers: 1
   persistent_workers: false
   pin_memory: true
@@ -45,7 +45,7 @@ n_obs_steps: 4
 name: train_diffusion_unet_lowdim
 obs_as_global_cond: true
 obs_as_local_cond: false
-obs_dim: 42
+obs_dim: 317
 optimizer:
   _target_: torch.optim.AdamW
   betas:
@@ -57,7 +57,7 @@ optimizer:
 past_action_visible: false
 policy:
   _target_: diffusion_policy.policy.diffusion_unet_lowdim_policy.DiffusionUnetLowdimPolicy
-  action_dim: 12
+  action_dim: 31
   horizon: 16
   model:
     _target_: diffusion_policy.model.diffusion.conditional_unet1d.ConditionalUnet1D
@@ -67,8 +67,8 @@ policy:
     - 256
     - 512
     - 1024
-    global_cond_dim: 168
-    input_dim: 12
+    global_cond_dim: 1268 # 1012
+    input_dim: 31
     kernel_size: 5
     local_cond_dim: null
     n_groups: 8
@@ -87,11 +87,11 @@ policy:
   oa_step_convention: true
   obs_as_global_cond: true
   obs_as_local_cond: false
-  obs_dim: 42
+  obs_dim: 317
   pred_action_steps_only: false
 pred_action_steps_only: false
 task:
-  action_dim: 12
+  action_dim: 31
   dataset:
     _target_: diffusion_policy.dataset.pusht_dataset.PushTLowdimDataset
     horizon: 16
@@ -100,7 +100,7 @@ task:
     pad_before: 1
     seed: 42
     val_ratio: 0.02
-    zarr_path: recorded_data15-55-22.zarr
+    zarr_path: recorded_data21-50-50.zarr
 
   eval_dataset:
     _target_: diffusion_policy.dataset.pusht_dataset_eval.PushTLowdimDataset
@@ -113,7 +113,7 @@ task:
     zarr_path: recorded_data_eval_2.zarr
   env_runner:
     # _target_: diffusion_policy.env_runner.pusht_keypoints_runner.PushTKeypointsRunner
-    _target_: diffusion_policy.env_runner.diffsionrobot_lowdim_legged_runner.LeggedRunner
+    _target_: diffusion_policy.env_runner.diffsionrobot_lowdim_isaac_runner.IsaacHumanoidRunner
     agent_keypoints: false
     fps: 10
     keypoint_visible_rate: 1.0
@@ -133,7 +133,7 @@ task:
     device: cpu
   keypoint_dim: 2
   name: pusht_lowdim
-  obs_dim: 42
+  obs_dim: 317
 task_name: pusht_lowdim
 training:
   checkpoint_every: 10
@@ -146,12 +146,12 @@ training:
   max_val_steps: null
   num_epochs: 100
   resume: true
-  rollout_every: 10
-  sample_every: 10
+  rollout_every: 1
+  sample_every: 1
   seed: 42
   tqdm_interval_sec: 1.0
   use_ema: true
-  val_every: 10
+  val_every: 1
 val_dataloader:
   batch_size: 2048
   num_workers: 1

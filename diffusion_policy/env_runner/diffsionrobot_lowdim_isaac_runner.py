@@ -52,7 +52,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         self.save_zarr = True
         
         if self.save_zarr:
-            self.num_envs=1
+            self.num_envs=4
             cfg['env']['numEnvs']=self.num_envs
             args.num_envs=self.num_envs
             # args.rl_device = 'cpu'
@@ -112,7 +112,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
         single_obs_dict = {'obs': state_history[:,-1, -253:].to('cuda:0')} #, 'past_action': action_history[0]}
         
         save_zarr = generate_data or (not online)
-        len_to_save = 1200 if not generate_data else 1e7
+        len_to_save = 1200 if not generate_data else 5e7
         if save_zarr:
             
             if generate_data:
@@ -177,7 +177,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             if save_zarr:
                 curr_idx = np.all(recorded_latent_episode == 0, axis=-1).argmax(axis=-1)
                 recorded_obs_episode[np.arange(env.num_envs),curr_idx,:] = single_obs_dict['obs'].to("cpu").detach().numpy()
-                recorded_acs_episode[np.arange(env.num_envs),curr_idx,:] = expert_action.to("cpu").detach().numpy()
+                recorded_acs_episode[np.arange(env.num_envs),curr_idx + 1,:] = expert_action.to("cpu").detach().numpy()
                 recorded_latent_episode[np.arange(env.num_envs),curr_idx,:] = self.player._ase_latents.to("cpu").detach().numpy()[:,:]
 
 
@@ -199,7 +199,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             env_ids = torch.nonzero(done, as_tuple=False).squeeze(1).int()
             # print("env_ids: ", env_ids)
             if len(env_ids) > 0:
-                # self.player.env_reset(env_ids)
+                self.player.env_reset(env_ids)
                 obs = env.reset(env_ids)
                 # state_history[env_ids,:,:] = obs_2[env_ids,None,:]
                 state_history[env_ids,:,-253:] = obs[env_ids].to(state_history.device)[:,None,:]
@@ -209,7 +209,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
                 # flush saved data
                 if save_zarr:
                     for i in range(len(env_ids)):
-                        epi_len = np.all(recorded_obs_episode[env_ids[i]] == 0, axis=-1).argmax(axis=-1)
+                        epi_len = np.all(recorded_obs_episode[env_ids[i]] == 0, axis=-1).argmax(axis=-1) + 1
                         if epi_len == 0:
                             epi_len = recorded_acs_episode.shape[1]
                         recorded_obs.append(np.copy(recorded_obs_episode[env_ids[i], :epi_len]))
@@ -273,6 +273,7 @@ class IsaacHumanoidRunner(BaseLowdimRunner):
             actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
             
             batch['obs'] = np.concatenate([latents, obs], axis=-1)
+            # batch['obs'] = obs
             batch['action'] = actions
             batch = dict_apply(batch, torch.from_numpy)
             batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))

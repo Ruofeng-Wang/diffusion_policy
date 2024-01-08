@@ -20,6 +20,9 @@ import tqdm
 import numpy as np
 import shutil
 
+import zarr
+
+
 from diffusion_policy.common.pytorch_util import dict_apply, optimizer_to
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 from diffusion_policy.policy.diffusion_transformer_lowdim_policy import DiffusionTransformerLowdimPolicy
@@ -36,8 +39,8 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
     include_keys = ['global_step', 'epoch']
 
-    def __init__(self, cfg: OmegaConf):
-        super().__init__(cfg)
+    def __init__(self, cfg: OmegaConf, output_dir=None):
+        super().__init__(cfg, output_dir=output_dir)
 
         # set seed
         seed = cfg.training.seed
@@ -183,7 +186,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                         tepoch.set_postfix(loss=raw_loss_cpu, refresh=False)
                         train_losses.append(raw_loss_cpu)
                         step_log = {
-                            'train_loss': raw_loss_cpu,
+                            'train_loss': np.sqrt(raw_loss_cpu),
                             'global_step': self.global_step,
                             'epoch': self.epoch,
                             'lr': lr_scheduler.get_last_lr()[0]
@@ -203,7 +206,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 # at the end of each epoch
                 # replace train_loss with epoch average
                 train_loss = np.mean(train_losses)
-                step_log['train_loss'] = train_loss
+                step_log['train_loss'] = np.sqrt(train_loss)
 
                 # ========= eval for this epoch ==========
                 policy = self.model
@@ -213,9 +216,53 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
 
                 # run rollout
                 if (self.epoch % cfg.training.rollout_every) == 0:
-                    runner_log = env_runner.run(policy)
-                    # log all
-                    step_log.update(runner_log)
+                    with torch.no_grad():
+                        # sample trajectory from training set, and evaluate difference
+                        filename = env_runner.run(policy)
+                        
+                        # dataset = hydra.utils.instantiate(cfg.task.eval_dataset)
+                        # assert isinstance(dataset, BaseLowdimDataset)
+                        # eval_dataloader = DataLoader(dataset, **cfg.dataloader)
+                        
+                        # for batch_idx, batch in enumerate(eval_dataloader):
+                        
+                        batch = {}
+                        with zarr.open(filename) as dataset:
+                            obs = np.array(dataset.data.state)
+                            actions = np.array(dataset.data.action)
+                            episode_indices = np.concatenate([np.array([np.arange(i, i + policy.horizon) for i in range(j*100, j*100+20)]) for j in range(12)])
+                            episode_indices = episode_indices.flatten()
+                            obs = obs[episode_indices].reshape(-1, policy.horizon, obs.shape[-1])
+                            actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
+                            
+                            batch['obs'] = obs
+                            batch['action'] = actions
+                            batch = dict_apply(batch, torch.from_numpy)
+                            batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                            obs_dict = {'obs': batch['obs']}
+                            gt_action = batch['action']
+                            
+                            result = policy.predict_action(obs_dict)
+                            if cfg.pred_action_steps_only:
+                                pred_action = result['action']
+                                start = cfg.n_obs_steps - 1
+                                end = start + cfg.n_action_steps
+                                gt_action = gt_action[:,start:end]
+                            else:
+                                pred_action = result['action_pred']
+                            mse = torch.nn.functional.mse_loss(pred_action, gt_action)
+                            # log
+                            step_log['eval_action_mse_error'] = np.sqrt(mse.item())
+                            print("eval mse: ", mse.item(), np.sqrt(mse.item()))
+                            # release RAM
+                            del batch
+                            del obs_dict
+                            del gt_action
+                            del result
+                            del pred_action
+                            del mse
+                        del dataset
+                        shutil.rmtree(filename)
 
                 # run validation
                 if (self.epoch % cfg.training.val_every) == 0:
@@ -233,7 +280,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                         if len(val_losses) > 0:
                             val_loss = torch.mean(torch.tensor(val_losses)).item()
                             # log epoch average validation loss
-                            step_log['val_loss'] = val_loss
+                            step_log['val_loss'] = np.sqrt(val_loss)
             
                 # run diffusion sampling on a training batch
                 if (self.epoch % cfg.training.sample_every) == 0:
@@ -252,7 +299,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                         else:
                             pred_action = result['action_pred']
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)
-                        step_log['train_action_mse_error'] = mse.item()
+                        step_log['train_action_mse_error'] = np.sqrt(mse.item())
                         del batch
                         del obs_dict
                         del gt_action
@@ -277,6 +324,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                     # We can't copy the last checkpoint here
                     # since save_checkpoint uses threads.
                     # therefore at this point the file might have been empty!
+                    metric_dict['test_mean_score'] = 1
                     topk_ckpt_path = topk_manager.get_ckpt_path(metric_dict)
 
                     if topk_ckpt_path is not None:
