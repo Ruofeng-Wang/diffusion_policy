@@ -8,7 +8,6 @@ import dill
 import math
 import wandb.sdk.data_types.video as wv
 from diffusion_policy.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
-from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
 # from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
@@ -19,8 +18,18 @@ from diffusion_policy.env_runner.base_lowdim_runner import BaseLowdimRunner
 
 import zarr, time
 
-from legged_gym.envs import *
-from legged_gym.utils import  get_args, export_policy_as_jit, task_registry, Logger
+from baselines.common import tf_util as U
+import tensorflow as tf
+from cassie_env.cassie_env import CassieEnv
+import time
+import numpy as np
+import argparse
+import ppo.policies as policies 
+from cassie_env import CASSIE_GYM_ROOT_DIR
+
+
+library_folder = CASSIE_GYM_ROOT_DIR + '/motions/MotionLibrary/'
+model_folder = CASSIE_GYM_ROOT_DIR + '/tf_model/'
 
 class LeggedRunner(BaseLowdimRunner):
     def __init__(self,
@@ -47,28 +56,35 @@ class LeggedRunner(BaseLowdimRunner):
         ):
         super().__init__(output_dir)
         
-        env_cfg, train_cfg = task_registry.get_cfgs(name='a1_amp')
-        # override some parameters for testing
-        env_cfg.env.num_envs = min(env_cfg.env.num_envs, 50)
-
-        train_cfg.runner.amp_num_preload_transitions = 1
-
-        # prepare environment        
-        self.save_zarr = True
+        EP_LEN_MAX = 2000
         
-        if self.save_zarr:
-            env_cfg.env.num_envs = 4
-        else: # placeholder
-            cfg['env']['numEnvs']=1
-            args.num_envs=1
-            args.rl_device = 'cpu'
-            args.device = 'cpu'
-            args.use_gpu_pipeline = False
-            args.use_gpu = False
+        env = CassieEnv(max_timesteps=EP_LEN_MAX,
+                        is_visual=False,
+                        ref_file=library_folder+'GaitLibrary.gaitlib',
+                        stage='single', 
+                        method='baseline')
 
-        
-        # breakpoint()
-        env, _ = task_registry.make_env(name='a1_amp', args=None, env_cfg=env_cfg)
+        env.num_envs = 1
+        env.max_episode_length = EP_LEN_MAX
+
+        model_dir = model_folder + 'trial3_baseline_dynrand_perturb_rnds1'
+        latest_checkpoint = tf.train.latest_checkpoint(model_dir)
+        model_path = latest_checkpoint
+        config = tf.ConfigProto(device_count={'GPU': 0})
+
+        ob_space_pol = env.observation_space_pol
+        ac_space = env.action_space
+
+        env.num_obs = 62 # obs base shape
+        env.num_actions = env.action_space.shape[0]
+
+        ob_space_vf = env.observation_space_vf
+        ob_space_pol_cnn = env.observation_space_pol_cnn
+        self.pi = policies.MLPCNNPolicy(name='pi', ob_space_vf=ob_space_vf, ob_space_pol=ob_space_pol, ob_space_pol_cnn=ob_space_pol_cnn, 
+                                    ac_space=ac_space, hid_size=512, num_hid_layers=2)
+
+        U.make_session(config=config)
+        U.load_state(model_path)
         
         self.env = env
         self.fps = fps
@@ -87,11 +103,11 @@ class LeggedRunner(BaseLowdimRunner):
         env.max_episode_length = int(env.max_episode_length)
 
         # plan for rollout
-        obs, _ = env.reset()
+        obs_vf, obs = env.reset()
+        expert_policy = self.pi
         past_action = None
         
-        expert_policy = torch.load('amp_policy.pt', map_location=torch.device('cpu'))
-        expert_policy = expert_policy.to(device)
+
 
         pbar = tqdm.tqdm(total=self.max_steps, desc=f"Eval IsaacGym", 
             leave=False, mininterval=self.tqdm_interval_sec)
@@ -102,14 +118,14 @@ class LeggedRunner(BaseLowdimRunner):
         action_history = torch.zeros((env.num_envs, history, env.num_actions), dtype=torch.float32, device=device)
         
         # state_history[:,:,:] = obs[:,None,:]
-        state_history[:,:,:] = obs.to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
+        # state_history[:,:,:] = torch.from_numpy(obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
         
         obs_dict = {"obs": state_history[:, :]} #, 'past_action': action_history}
         single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")} #, 'past_action': action_history[0]}
         
         
-        save_zarr = generate_data or (not online)
-        len_to_save = 1200 if not generate_data else 1e6
+        save_zarr = False #generate_data or (not online)
+        len_to_save = 1e6 if not generate_data else 1e6
         print("length to save", len_to_save)
         if save_zarr:
             
@@ -142,11 +158,11 @@ class LeggedRunner(BaseLowdimRunner):
         idx = 0    
         saved_idx = 0    
         skip = 5
+        t1 = time.perf_counter()
         while True:
             # run policy
             with torch.no_grad():
-                expert_action = expert_policy.act_inference(obs.detach())
-                # if idx % skip == 4: #not save_zarr and 
+                expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
                 if online:    
                     obs_dict = {"obs": state_history[:, -9:-1, :]}
                     t1 = time.perf_counter()
@@ -161,9 +177,9 @@ class LeggedRunner(BaseLowdimRunner):
                     #     action_dict = policy.predict_action(obs_dict)
                     
                     pred_action = action_dict["action_pred"]
-                    action = pred_action[:,history:history+3,:]
-                # else:
-                #     action = expert_action[:, None, :]
+                    action = pred_action[:,history:history+6,:]
+                else:
+                    action = expert_action[None, None, :]
             if save_zarr:
                 curr_idx = np.all(recorded_obs_episode == 0, axis=-1).argmax(axis=-1)
                 # curr_idx = idx
@@ -174,44 +190,54 @@ class LeggedRunner(BaseLowdimRunner):
             self.n_action_steps = action.shape[1]
             for i in range(self.n_action_steps):
                 action_step = action[:, i, :]
-                obs, _, rews, done, infos, _, _ = env.step(action_step)
-            
+                action_step = action_step[0]
+                _, obs, reward, done, info = env.step(action_step)
+
+                # draw_state = env.render()
+                
                 state_history = torch.roll(state_history, shifts=-1, dims=1)
                 action_history = torch.roll(action_history, shifts=-1, dims=1)
                 
-                state_history[:, -1, :] = obs
-                action_history[:, -1, :] = action_step
+                # state_history[:, -1, :] = obs
+                # action_history[:, -1, :] = action_step
                 single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")}
             
                 idx += 1
             # reset env
-            env_ids = torch.nonzero(done, as_tuple=False).squeeze(1).int()
-            if len(env_ids) > 0:
-                state_history[env_ids,:,:] = single_obs_dict["obs"][env_ids].to(state_history.device)[:,None,:]
-                action_history[env_ids,:,:] = 0.0
                 
-                idx = 0
+            if done:
+                env.reset()
+            # env_ids = torch.nonzero(done, as_tuple=False).squeeze(1).int()
+            # if len(env_ids) > 0:
+            #     state_history[env_ids,:,:] = single_obs_dict["obs"][env_ids].to(state_history.device)[:,None,:]
+            #     action_history[env_ids,:,:] = 0.0
                 
-                # flush saved data
-                if save_zarr:
-                    for i in range(len(env_ids)):
-                        epi_len = np.all(recorded_obs_episode[env_ids[i]] == 0, axis=-1).argmax(axis=-1)
-                        if epi_len == 0:
-                            epi_len = recorded_acs_episode.shape[1]
-                        recorded_obs.append(np.copy(recorded_obs_episode[env_ids[i], :epi_len]))
-                        recorded_acs.append(np.copy(recorded_acs_episode[env_ids[i], :epi_len]))
+            #     idx = 0
+            #     env.reset()
+                
+            #     # flush saved data
+            #     if save_zarr:
+            #         for i in range(len(env_ids)):
+            #             epi_len = np.all(recorded_obs_episode[env_ids[i]] == 0, axis=-1).argmax(axis=-1)
+            #             if epi_len == 0:
+            #                 epi_len = recorded_acs_episode.shape[1]
+            #             recorded_obs.append(np.copy(recorded_obs_episode[env_ids[i], :epi_len]))
+            #             recorded_acs.append(np.copy(recorded_acs_episode[env_ids[i], :epi_len]))
                         
-                        recorded_obs_episode[env_ids[i]] = 0
-                        recorded_acs_episode[env_ids[i]] = 0
+            #             recorded_obs_episode[env_ids[i]] = 0
+            #             recorded_acs_episode[env_ids[i]] = 0
                         
-                        saved_idx += epi_len
-                        episode_ends.append(saved_idx)
+            #             saved_idx += epi_len
+            #             episode_ends.append(saved_idx)
                         
-                        print("saved_idx: ", saved_idx)
+            #             print("saved_idx: ", saved_idx)
                     
-            done = done.cpu().numpy()
-            done = np.all(done)
+            # done = done.cpu().numpy()
+            # done = np.all(done)
             past_action = action
+            if idx % 1000 == 0:
+                print("time to collect 1000: ", time.perf_counter() - t1)
+                t1 = time.perf_counter()
 
             # update pbar
             if online:
@@ -236,45 +262,6 @@ class LeggedRunner(BaseLowdimRunner):
             
         # clear out video buffer
         _ = env.reset()
-        
-        
-        # # log
-        # log_data = dict()
-        # log_data['eval_action_error'] = torch.mean(torch.tensor(action_error))
-        # print("eval_action_error: ", log_data['eval_action_error'])
-
-        # with torch.no_grad():
-        #     batch = {}
-        #     dataset = zarr.open(file_name, "r")
-        #     # sample trajectory from training set, and evaluate difference
-        #     obs = dataset.data.state
-        #     actions = dataset.data.action
-        #     episode_indices = np.concatenate([np.array([np.arange(i, i + policy.horizon) for i in range(j*100, j*100+20)]) for j in range(10)])
-        #     episode_indices = episode_indices.flatten()
-        #     obs = obs[episode_indices].reshape(-1, policy.horizon, obs.shape[-1])
-        #     actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
-            
-        #     batch["obs"] = obs
-        #     batch["action"] = actions
-        #     batch = dict_apply(batch, torch.from_numpy)
-        #     batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
-        #     obs_dict = {"obs": batch["obs"]}
-        #     gt_action = batch["action"]
-            
-        #     result = policy.predict_action(obs_dict)
-
-        #     pred_action = result["action_pred"]
-        #     mse = torch.nn.functional.mse_loss(pred_action, gt_action)
-            
-        #     print("eval mse: ", mse.item(), np.sqrt(mse.item()))
-        #     # release RAM
-        #     del batch
-        #     del obs_dict
-        #     del gt_action
-        #     del result
-        #     del pred_action
-        #     del mse
-
 
         return file_name
 

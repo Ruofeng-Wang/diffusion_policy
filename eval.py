@@ -8,7 +8,10 @@ import sys
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
 
-from isaacgym.torch_utils import *
+try:
+    from isaacgym.torch_utils import *
+except:
+    print("Isaac Gym Not Installed")
 
 import os
 import pathlib
@@ -35,7 +38,7 @@ def main(checkpoint, output_dir, device):
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
     # action_steps = 4
-    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_legged_runner.LeggedRunner'
+    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_legged_runner_mp.LeggedRunner'
     # cfg['n_action_steps'] = action_steps
     # cfg['task']['env_runner']['n_action_steps'] = action_steps
     # cfg['policy']['n_action_steps'] = action_steps
@@ -62,7 +65,7 @@ def main(checkpoint, output_dir, device):
     env_runner = hydra.utils.instantiate(
         cfg.task.env_runner,
         output_dir=output_dir)
-    runner_log = env_runner.run(policy, online=False, generate_data=True)
+    runner_log = env_runner.run(policy, online=False, generate_data=False)
     
     # dump log to json
     json_log = dict()

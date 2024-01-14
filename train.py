@@ -8,8 +8,12 @@ import sys
 # use line-buffering for both stdout and stderr
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
-from isaacgym.torch_utils import *
 
+try:
+    from isaacgym.torch_utils import *
+except:
+    print("Isaac Gym Not Installed")
+    
 import torch
 torch.set_float32_matmul_precision('medium')
 torch.backends.cuda.matmul.allow_tf32 = True

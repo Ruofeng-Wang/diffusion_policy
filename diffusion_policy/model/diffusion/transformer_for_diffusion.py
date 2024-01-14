@@ -26,6 +26,9 @@ class TransformerForDiffusion(ModuleAttrMixin):
         ) -> None:
         super().__init__()
 
+        separate_goal_conditioning = False
+        self.separate_goal_conditioning = separate_goal_conditioning
+
         # compute number of tokens for main trunk and condition encoder
         if n_obs_steps is None:
             n_obs_steps = horizon
@@ -38,7 +41,10 @@ class TransformerForDiffusion(ModuleAttrMixin):
         obs_as_cond = cond_dim > 0
         if obs_as_cond:
             assert time_as_cond
-            T_cond += n_obs_steps
+            if separate_goal_conditioning:
+                T_cond += n_obs_steps*2
+            else:
+                T_cond += n_obs_steps
 
         # input embedding stem
         self.input_emb = nn.Linear(input_dim, n_emb)
@@ -50,7 +56,11 @@ class TransformerForDiffusion(ModuleAttrMixin):
         self.cond_obs_emb = None
         
         if obs_as_cond:
-            self.cond_obs_emb = nn.Linear(cond_dim, n_emb)
+            if separate_goal_conditioning:
+                self.cond_obs_emb = nn.Linear(cond_dim-3, n_emb)
+                self.cond_obs_emb_2 = nn.Linear(3, n_emb)
+            else:
+                self.cond_obs_emb = nn.Linear(cond_dim, n_emb)
 
         self.cond_pos_emb = None
         self.encoder = None
@@ -121,13 +131,22 @@ class TransformerForDiffusion(ModuleAttrMixin):
             self.register_buffer("mask", mask)
             
             if time_as_cond and obs_as_cond:
-                S = T_cond
+                if separate_goal_conditioning:
+                    S = (T_cond-1) // 2 + 1
+                else:
+                    S = T_cond
                 t, s = torch.meshgrid(
                     torch.arange(T),
                     torch.arange(S),
                     indexing='ij'
                 )
                 mask = t >= (s-1) # add one dimension since time is the first token in cond
+                
+                if separate_goal_conditioning:
+                    new_mask = torch.zeros((mask.shape[0], (mask.shape[1]-1)*2 + 1), dtype=torch.bool)
+                    new_mask[:,:mask.shape[1]] = mask
+                    new_mask[:,mask.shape[1]:] = mask[:,1:]
+                    mask = new_mask
                 mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
                 self.register_buffer('memory_mask', mask)
             else:
@@ -309,9 +328,15 @@ class TransformerForDiffusion(ModuleAttrMixin):
             # encoder
             cond_embeddings = time_emb
             if self.obs_as_cond:
-                cond_obs_emb = self.cond_obs_emb(cond)
-                # (B,To,n_emb)
-                cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb], dim=1)
+                if self.separate_goal_conditioning:
+                    cond_obs_emb = self.cond_obs_emb(torch.cat([cond[...,:3], cond[...,6:]], dim=-1))
+                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,3:6])
+                    # (B,To,n_emb)
+                    cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
+                else:
+                    cond_obs_emb = self.cond_obs_emb(cond)
+                    # (B,To,n_emb)
+                    cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb], dim=1)
             tc = cond_embeddings.shape[1]
             position_embeddings = self.cond_pos_emb[
                 :, :tc, :
