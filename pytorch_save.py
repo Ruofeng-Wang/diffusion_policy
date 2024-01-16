@@ -51,7 +51,7 @@ def main(checkpoint, output_dir, device):
         policy = workspace.ema_model
     model = policy.model
 
-    # torch.save(model, "converted_model.pt")
+    torch.save(model, "converted_model.pt")
 
 
     onnx_file = "./model.onnx"
