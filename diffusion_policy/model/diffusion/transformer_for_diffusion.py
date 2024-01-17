@@ -14,9 +14,9 @@ class TransformerForDiffusion(ModuleAttrMixin):
             horizon: int,
             n_obs_steps: int = None,
             cond_dim: int = 0,
-            n_layer: int = 12,
-            n_head: int = 12,
-            n_emb: int = 768,
+            n_layer: int = 6,
+            n_head: int = 8,
+            n_emb: int = 256,
             p_drop_emb: float = 0.1,
             p_drop_attn: float = 0.1,
             causal_attn: bool=False,
@@ -26,18 +26,25 @@ class TransformerForDiffusion(ModuleAttrMixin):
         ) -> None:
         super().__init__()
 
+        separate_goal_conditioning = True
+        self.separate_goal_conditioning = separate_goal_conditioning
+
         # compute number of tokens for main trunk and condition encoder
         if n_obs_steps is None:
             n_obs_steps = horizon
         
         T = horizon
         T_cond = 1
-        T += 1
-        T_cond -= 1
+        if not time_as_cond:
+            T += 1
+            T_cond -= 1
         obs_as_cond = cond_dim > 0
-        
-        assert time_as_cond
-        T_cond += n_obs_steps
+        if obs_as_cond:
+            assert time_as_cond
+            if separate_goal_conditioning:
+                T_cond += n_obs_steps*2
+            else:
+                T_cond += n_obs_steps
 
         # input embedding stem
         self.input_emb = nn.Linear(input_dim, n_emb)
@@ -48,53 +55,105 @@ class TransformerForDiffusion(ModuleAttrMixin):
         self.time_emb = SinusoidalPosEmb(n_emb)
         self.cond_obs_emb = None
         
-        self.cond_obs_emb = nn.Linear(cond_dim, n_emb)
+        if obs_as_cond:
+            if separate_goal_conditioning:
+                self.cond_obs_emb = nn.Linear(cond_dim-3, n_emb)
+                self.cond_obs_emb_2 = nn.Linear(3, n_emb)
+            else:
+                self.cond_obs_emb = nn.Linear(cond_dim, n_emb)
 
         self.cond_pos_emb = None
         self.encoder = None
         self.decoder = None
         encoder_only = False
-        
-        self.cond_pos_emb = nn.Parameter(torch.zeros(1, T_cond, n_emb))
-    
-        self.encoder = nn.Sequential(
-            nn.Linear(n_emb, 4 * n_emb),
-            nn.Mish(),
-            nn.Linear(4 * n_emb, n_emb)
-        )
-        # decoder
-        decoder_layer = nn.TransformerDecoderLayer(
-            d_model=n_emb,
-            nhead=n_head,
-            dim_feedforward=4*n_emb,
-            dropout=p_drop_attn,
-            activation='gelu',
-            batch_first=True,
-            norm_first=True # important for stability
-        )
-        self.decoder = nn.TransformerDecoder(
-            decoder_layer=decoder_layer,
-            num_layers=n_layer
-        )
+        if T_cond > 0:
+            self.cond_pos_emb = nn.Parameter(torch.zeros(1, T_cond, n_emb))
+            if n_cond_layers > 0:
+                encoder_layer = nn.TransformerEncoderLayer(
+                    d_model=n_emb,
+                    nhead=n_head,
+                    dim_feedforward=4*n_emb,
+                    dropout=p_drop_attn,
+                    activation='gelu',
+                    batch_first=True,
+                    norm_first=True
+                )
+                self.encoder = nn.TransformerEncoder(
+                    encoder_layer=encoder_layer,
+                    num_layers=n_cond_layers
+                )
+            else:
+                self.encoder = nn.Sequential(
+                    nn.Linear(n_emb, 4 * n_emb),
+                    nn.Mish(),
+                    nn.Linear(4 * n_emb, n_emb)
+                )
+            # decoder
+            decoder_layer = nn.TransformerDecoderLayer(
+                d_model=n_emb,
+                nhead=n_head,
+                dim_feedforward=4*n_emb,
+                dropout=p_drop_attn,
+                activation='gelu',
+                batch_first=True,
+                norm_first=True # important for stability
+            )
+            self.decoder = nn.TransformerDecoder(
+                decoder_layer=decoder_layer,
+                num_layers=n_layer
+            )
+        else:
+            # encoder only BERT
+            encoder_only = True
+
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=n_emb,
+                nhead=n_head,
+                dim_feedforward=4*n_emb,
+                dropout=p_drop_attn,
+                activation='gelu',
+                batch_first=True,
+                norm_first=True
+            )
+            self.encoder = nn.TransformerEncoder(
+                encoder_layer=encoder_layer,
+                num_layers=n_layer
+            )
 
         # attention mask
-        # causal mask to ensure that attention is only applied to the left in the input sequence
-        # torch.nn.Transformer uses additive mask as opposed to multiplicative mask in minGPT
-        # therefore, the upper triangle should be -inf and others (including diag) should be 0.
-        sz = T
-        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        self.register_buffer("mask", mask)
-        
-        S = T_cond
-        t, s = torch.meshgrid(
-            torch.arange(T),
-            torch.arange(S),
-            indexing='ij'
-        )
-        mask = t >= (s-1) # add one dimension since time is the first token in cond
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        self.register_buffer('memory_mask', mask)
+        if causal_attn:
+            # causal mask to ensure that attention is only applied to the left in the input sequence
+            # torch.nn.Transformer uses additive mask as opposed to multiplicative mask in minGPT
+            # therefore, the upper triangle should be -inf and others (including diag) should be 0.
+            sz = T
+            mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+            mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+            self.register_buffer("mask", mask)
+            
+            if time_as_cond and obs_as_cond:
+                if separate_goal_conditioning:
+                    S = (T_cond-1) // 2 + 1
+                else:
+                    S = T_cond
+                t, s = torch.meshgrid(
+                    torch.arange(T),
+                    torch.arange(S),
+                    indexing='ij'
+                )
+                mask = t >= (s-1) # add one dimension since time is the first token in cond
+                
+                if separate_goal_conditioning:
+                    new_mask = torch.zeros((mask.shape[0], (mask.shape[1]-1)*2 + 1), dtype=torch.bool)
+                    new_mask[:,:mask.shape[1]] = mask
+                    new_mask[:,mask.shape[1]:] = mask[:,1:]
+                    mask = new_mask
+                mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+                self.register_buffer('memory_mask', mask)
+            else:
+                self.memory_mask = None
+        else:
+            self.mask = None
+            self.memory_mask = None
 
         # decoder head
         self.ln_f = nn.LayerNorm(n_emb)
@@ -239,41 +298,69 @@ class TransformerForDiffusion(ModuleAttrMixin):
         """
         # 1. time
         timesteps = timestep
+        if not torch.is_tensor(timesteps):
+            # TODO: this requires sync between CPU and GPU. So try to pass timesteps as tensors if you can
+            timesteps = torch.tensor([timesteps], dtype=torch.long, device=sample.device)
+        elif torch.is_tensor(timesteps) and len(timesteps.shape) == 0:
+            timesteps = timesteps[None].to(sample.device)
+        # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
+        timesteps = timesteps.expand(sample.shape[0])
         time_emb = self.time_emb(timesteps).unsqueeze(1)
         # (B,1,n_emb)
 
         # process input
         input_emb = self.input_emb(sample)
 
-        # encoder
-        cond_embeddings = time_emb
-        cond_obs_emb = self.cond_obs_emb(cond)
-        # (B,To,n_emb)
-        cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb], dim=1)
-        tc = cond_embeddings.shape[1]
-        position_embeddings = self.cond_pos_emb[
-            :, :tc, :
-        ]  # each position maps to a (learnable) vector
-        x = self.drop(cond_embeddings + position_embeddings)
-        x = self.encoder(x)
-        memory = x
-        # (B,T_cond,n_emb)
-        
-        # decoder
-        token_embeddings = input_emb
-        t = token_embeddings.shape[1]
-        position_embeddings = self.pos_emb[
-            :, :t, :
-        ]  # each position maps to a (learnable) vector
-        x = self.drop(token_embeddings + position_embeddings)
-        # (B,T,n_emb)
-        x = self.decoder(
-            tgt=x,
-            memory=memory,
-            tgt_mask=self.mask,
-            memory_mask=self.memory_mask
-        )
-        # (B,T,n_emb)
+        if self.encoder_only:
+            # BERT
+            token_embeddings = torch.cat([time_emb, input_emb], dim=1)
+            t = token_embeddings.shape[1]
+            position_embeddings = self.pos_emb[
+                :, :t, :
+            ]  # each position maps to a (learnable) vector
+            x = self.drop(token_embeddings + position_embeddings)
+            # (B,T+1,n_emb)
+            x = self.encoder(src=x, mask=self.mask)
+            # (B,T+1,n_emb)
+            x = x[:,1:,:]
+            # (B,T,n_emb)
+        else:
+            # encoder
+            cond_embeddings = time_emb
+            if self.obs_as_cond:
+                if self.separate_goal_conditioning:
+                    cond_obs_emb = self.cond_obs_emb(torch.cat([cond[...,:3], cond[...,6:]], dim=-1))
+                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,3:6])
+                    # (B,To,n_emb)
+                    cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
+                else:
+                    cond_obs_emb = self.cond_obs_emb(cond)
+                    # (B,To,n_emb)
+                    cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb], dim=1)
+            tc = cond_embeddings.shape[1]
+            position_embeddings = self.cond_pos_emb[
+                :, :tc, :
+            ]  # each position maps to a (learnable) vector
+            x = self.drop(cond_embeddings + position_embeddings)
+            x = self.encoder(x)
+            memory = x
+            # (B,T_cond,n_emb)
+            
+            # decoder
+            token_embeddings = input_emb
+            t = token_embeddings.shape[1]
+            position_embeddings = self.pos_emb[
+                :, :t, :
+            ]  # each position maps to a (learnable) vector
+            x = self.drop(token_embeddings + position_embeddings)
+            # (B,T,n_emb)
+            x = self.decoder(
+                tgt=x,
+                memory=memory,
+                tgt_mask=self.mask,
+                memory_mask=self.memory_mask
+            )
+            # (B,T,n_emb)
         
         # head
         x = self.ln_f(x)
@@ -353,4 +440,3 @@ def test():
     timestep = torch.tensor(0)
     sample = torch.zeros((4,8,16))
     out = transformer(sample, timestep)
-
