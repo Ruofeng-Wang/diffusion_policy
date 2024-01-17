@@ -51,17 +51,19 @@ def main(checkpoint, output_dir, device):
         policy = workspace.ema_model
     model = policy.model
 
-    torch.save(model, "converted_model.pt")
+    model = model.eval()
+
+    torch.save(model, "./checkpoints/converted_model.pt")
 
 
-    onnx_file = "./model.onnx"
+    onnx_file = "./checkpoints/model.onnx"
 
     # model = torch.load("model_full.pt")
 
 
-    sample = torch.rand((1, 16, 12), dtype=torch.float32, device=device)
+    sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
     timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    cond = torch.rand((1, 8, 42), dtype=torch.float32, device=device)
+    cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
 
     # Export model as ONNX file ----------------------------------------------------
     torch.onnx.export(
