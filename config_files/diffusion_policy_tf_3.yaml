@@ -97,7 +97,7 @@ task:
     pad_before: 1
     seed: 42
     val_ratio: 0.02
-    zarr_path: recorded_data16-02-51.zarr
+    zarr_path: recorded_data16-02-51_go1.zarr
   env_runner:
     _target_: diffusion_policy.env_runner.diffsionrobot_lowdim_legged_runner.LeggedRunner
     agent_keypoints: false

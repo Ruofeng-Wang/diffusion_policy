@@ -162,8 +162,8 @@ class LeggedRunner(BaseLowdimRunner):
                     
                     pred_action = action_dict["action_pred"]
                     action = pred_action[:,history:history+3,:]
-                # else:
-                #     action = expert_action[:, None, :]
+                else:
+                    action = expert_action[:, None, :]
             if save_zarr:
                 curr_idx = np.all(recorded_obs_episode == 0, axis=-1).argmax(axis=-1)
                 # curr_idx = idx

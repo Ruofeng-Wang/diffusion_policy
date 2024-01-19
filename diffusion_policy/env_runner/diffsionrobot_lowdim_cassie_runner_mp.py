@@ -48,7 +48,7 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
     env = CassieEnv(max_timesteps=EP_LEN_MAX,
                     is_visual=False,
                     ref_file=library_folder+'GaitLibrary.gaitlib',
-                    stage='single', 
+                    stage='dynrand', 
                     method='baseline')
 
     env.num_envs = 1
@@ -138,13 +138,12 @@ class LeggedRunner(BaseLowdimRunner):
             device=None,
         ):
         super().__init__(output_dir)
-        
-        self.generate_data = False
+        self.generate_data = True
         if not self.generate_data:            
             env = CassieEnv(max_timesteps=EP_LEN_MAX,
-                            is_visual=True,
+                            is_visual=False,
                             ref_file=library_folder+'GaitLibrary.gaitlib',
-                            stage='single', 
+                            stage='dynrand', 
                             method='baseline')
 
             env.num_envs = 1
@@ -189,7 +188,7 @@ class LeggedRunner(BaseLowdimRunner):
         assert generate_data == self.generate_data, "generate data?"
 
         save_zarr = generate_data or (not online)
-        len_to_save = 1200 if not generate_data else 1e5
+        len_to_save = 1200 if not generate_data else 1e7
         
         if not self.generate_data:
             obs_vf, obs = env.reset()
@@ -212,7 +211,7 @@ class LeggedRunner(BaseLowdimRunner):
             single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")} #, 'past_action': action_history[0]}
 
         else:
-            num_processes = 10  # Define the number of processes
+            num_processes = 24  # Define the number of processes
 
             # Create a manager and a shared list
             manager = multiprocessing.Manager()
@@ -293,7 +292,7 @@ class LeggedRunner(BaseLowdimRunner):
                     action_step = action_step[0]
                     _, obs, reward, done, info = env.step(action_step)
 
-                    draw_state = env.render()
+                    # draw_state = env.render()
                     
                     state_history = torch.roll(state_history, shifts=-1, dims=1)
                     action_history = torch.roll(action_history, shifts=-1, dims=1)

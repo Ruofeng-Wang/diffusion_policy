@@ -61,7 +61,7 @@ class LeggedRunner(BaseLowdimRunner):
         env = CassieEnv(max_timesteps=EP_LEN_MAX,
                         is_visual=False,
                         ref_file=library_folder+'GaitLibrary.gaitlib',
-                        stage='single', 
+                        stage='dynrand', 
                         method='baseline')
 
         env.num_envs = 1
