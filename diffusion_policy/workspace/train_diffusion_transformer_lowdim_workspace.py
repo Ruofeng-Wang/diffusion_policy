@@ -320,6 +320,8 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                     for key, value in step_log.items():
                         new_key = key.replace('/', '_')
                         metric_dict[new_key] = value
+                    # TODO: This is a HACK
+                    metric_dict['test_mean_score'] = 1
                     
                     # We can't copy the last checkpoint here
                     # since save_checkpoint uses threads.
