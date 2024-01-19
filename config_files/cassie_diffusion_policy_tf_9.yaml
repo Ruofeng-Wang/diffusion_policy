@@ -1,5 +1,5 @@
 _target_: diffusion_policy.workspace.train_diffusion_transformer_lowdim_workspace.TrainDiffusionTransformerLowdimWorkspace
-action_dim: 12
+action_dim: 10
 checkpoint:
   save_last_ckpt: true
   save_last_snapshot: false
@@ -22,7 +22,7 @@ ema:
   power: 0.75
   update_after_step: 0
 exp_name: default
-horizon: 16
+horizon: 12
 keypoint_visible_rate: 1.0
 logging:
   group: null
@@ -43,7 +43,7 @@ n_latency_steps: 0
 n_obs_steps: 8
 name: train_diffusion_transformer_lowdim
 obs_as_cond: true
-obs_dim: 42
+obs_dim: 62
 optimizer:
   betas:
   - 0.9
@@ -53,24 +53,25 @@ optimizer:
 past_action_visible: false
 policy:
   _target_: diffusion_policy.policy.diffusion_transformer_lowdim_policy.DiffusionTransformerLowdimPolicy
-  action_dim: 12
-  horizon: 16
+  action_dim: 10
+  horizon: 12
   model:
     _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
     causal_attn: true
-    cond_dim: 42
-    horizon: 16
-    input_dim: 12
+    cond_dim: 62
+    horizon: 12
+    input_dim: 10
     n_cond_layers: 0
     n_emb: 256
     n_head: 8
     n_layer: 6
     n_obs_steps: 8
     obs_as_cond: true
-    output_dim: 12
+    output_dim: 10
     p_drop_attn: 0.3
     p_drop_emb: 0.0
     time_as_cond: true
+    separate_goal_conditioning: true
   n_action_steps: 8
   n_obs_steps: 8
   noise_scheduler:
@@ -79,27 +80,27 @@ policy:
     beta_schedule: squaredcos_cap_v2
     beta_start: 0.0001
     clip_sample: true
-    num_train_timesteps: 20
+    num_train_timesteps: 10
     prediction_type: epsilon
     variance_type: fixed_small
-  num_inference_steps: 20
+  num_inference_steps: 10
   obs_as_cond: true
-  obs_dim: 42
+  obs_dim: 62
   pred_action_steps_only: false
 pred_action_steps_only: false
 task:
-  action_dim: 12
+  action_dim: 10
   dataset:
     _target_: diffusion_policy.dataset.pusht_dataset.PushTLowdimDataset
-    horizon: 16
+    horizon: 12
     max_train_episodes: 90
     pad_after: 7
     pad_before: 1
     seed: 42
     val_ratio: 0.02
-    zarr_path: recorded_data16-02-51_go1.zarr
+    zarr_path: recorded_data07-55-20_cassie_5e6.zarr
   env_runner:
-    _target_: diffusion_policy.env_runner.diffsionrobot_lowdim_legged_runner.LeggedRunner
+    _target_: diffusion_policy.env_runner.diffsionrobot_lowdim_cassie_runner_mp.LeggedRunner
     agent_keypoints: false
     fps: 10
     keypoint_visible_rate: 1.0
@@ -118,7 +119,7 @@ task:
     train_start_seed: 0
   keypoint_dim: 2
   name: pusht_lowdim
-  obs_dim: 42
+  obs_dim: 62
 task_name: pusht_lowdim
 training:
   checkpoint_every: 10
