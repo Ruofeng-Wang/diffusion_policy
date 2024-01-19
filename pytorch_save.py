@@ -10,12 +10,14 @@ sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
 
 # from isaacgym.torch_utils import *
 
+import numpy as np
 import click
 import hydra
 import torch
 import torch.onnx
 import dill
 from omegaconf import OmegaConf
+import onnxruntime
 
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 
@@ -53,6 +55,12 @@ def main(checkpoint, output_dir, device):
 
     model = model.eval()
 
+    sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
+    timestep = torch.rand((1, ), dtype=torch.float32, device=device)
+    cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
+
+    torch_out = model.forward(sample, timestep, cond)
+
     torch.save(model, "./checkpoints/converted_model.pt")
 
 
@@ -60,10 +68,6 @@ def main(checkpoint, output_dir, device):
 
     # model = torch.load("model_full.pt")
 
-
-    sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
-    timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
 
     # Export model as ONNX file ----------------------------------------------------
     torch.onnx.export(
@@ -80,6 +84,20 @@ def main(checkpoint, output_dir, device):
         )
 
     print("Succeeded converting model into ONNX!")
+
+    ort_session = onnxruntime.InferenceSession(onnx_file, providers=["CPUExecutionProvider"])
+
+    # compute ONNX Runtime output prediction
+    ort_inputs = {
+        ort_session.get_inputs()[0].name: sample.detach().cpu().numpy(),
+        ort_session.get_inputs()[1].name: timestep.detach().cpu().numpy(),
+        ort_session.get_inputs()[2].name: cond.detach().cpu().numpy(),
+        }
+    ort_outs = ort_session.run(None, ort_inputs)
+    
+    np.testing.assert_allclose(torch_out.detach().cpu().numpy(), ort_outs[0], rtol=1e-03, atol=1e-05)
+
+    print("test passed")
 
 
 
