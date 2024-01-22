@@ -63,6 +63,13 @@ def main(checkpoint, output_dir, device):
 
     torch.save(model, "./checkpoints/converted_model.pt")
 
+    config_dict = {'horizon': cfg['policy']['horizon'], 
+                   'n_obs_steps': cfg['policy']['n_obs_steps'],
+                   'num_inference_steps': cfg['policy']['num_inference_steps'],
+                   }
+    normalizer_ckpt = {k: v for k, v in payload['state_dicts']['model'].items() if "normalizer" in k}
+    torch.save((config_dict, normalizer_ckpt), "./checkpoints/config_dict.pt")
+
 
     onnx_file = "./checkpoints/model.onnx"
 
