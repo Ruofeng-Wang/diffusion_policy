@@ -144,7 +144,7 @@ class LeggedRunner(BaseLowdimRunner):
             env = CassieEnv(max_timesteps=EP_LEN_MAX,
                             is_visual=True,
                             ref_file=library_folder+'GaitLibrary.gaitlib',
-                            stage='single', 
+                            stage='dynrand', 
                             method='baseline')
 
             env.num_envs = 1
@@ -257,14 +257,14 @@ class LeggedRunner(BaseLowdimRunner):
             action_error = []
             idx = 0    
             saved_idx = 0    
-            skip = 5
+            skip = 0
             t1 = time.perf_counter()
             while True:
                 # run policy
                 with torch.no_grad():
                     expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
-                    if online:    
-                        obs_dict = {"obs": state_history[:, -9:-1, :]}
+                    if online and idx > skip:    
+                        obs_dict = {"obs": state_history[:, -history-1:-1, :]}
                         t1 = time.perf_counter()
                         action_dict = policy.predict_action(obs_dict)
                         t2 = time.perf_counter()
@@ -277,7 +277,7 @@ class LeggedRunner(BaseLowdimRunner):
                         #     action_dict = policy.predict_action(obs_dict)
                         
                         pred_action = action_dict["action_pred"]
-                        action = pred_action[:,history:history+6,:]
+                        action = pred_action[:,history:history+2,:].cpu().numpy()
                     else:
                         action = expert_action[None, None, :]
                 if save_zarr:

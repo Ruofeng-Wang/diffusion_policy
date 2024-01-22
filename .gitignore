@@ -142,3 +142,6 @@ dmypy.json
 outputs/
 
 *.zarr
+
+
+cassie_ckpts/
