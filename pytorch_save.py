@@ -55,9 +55,9 @@ def main(checkpoint, output_dir, device):
 
     model = model.eval()
 
-    sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
+    sample = torch.rand((1, cfg['policy']['horizon'], 10), dtype=torch.float32, device=device)
     timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
+    cond = torch.rand((1, cfg['policy']['n_obs_steps'], 62), dtype=torch.float32, device=device)
 
     torch_out = model.forward(sample, timestep, cond)
 
