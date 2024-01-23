@@ -33,7 +33,7 @@ import os
 
 library_folder = CASSIE_GYM_ROOT_DIR + '/motions/MotionLibrary/'
 model_folder = CASSIE_GYM_ROOT_DIR + '/tf_model/'
-EP_LEN_MAX = 600
+EP_LEN_MAX = 2000
 
 
 def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
@@ -44,11 +44,13 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
 
     random.seed(seed)
     np.random.seed(seed)
+    
+    perturb_flag = np.random.choice([True, False], p=[0.2, 0.8])
         
     env = CassieEnv(max_timesteps=EP_LEN_MAX,
                     is_visual=False,
                     ref_file=library_folder+'GaitLibrary.gaitlib',
-                    stage='dynrand', 
+                    stage='dynrand_perturb' if perturb_flag else 'dynrand', 
                     method='baseline')
 
     env.num_envs = 1
@@ -56,7 +58,7 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
 
     obs_vf, obs = env.reset()
 
-    model_dir = model_folder + 'trial3_baseline_dynrand_perturb_rnds1'
+    model_dir = model_folder + 'walking_finetune_stable'
     latest_checkpoint = tf.train.latest_checkpoint(model_dir)
     model_path = latest_checkpoint
     config = tf.ConfigProto(device_count={'GPU': 0})
@@ -64,7 +66,7 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
     ob_space_pol = env.observation_space_pol
     ac_space = env.action_space
 
-    env.num_obs = 62 # obs base shape
+    env.num_obs = 94 # obs base shape
     env.num_actions = env.action_space.shape[0]
 
     ob_space_vf = env.observation_space_vf
@@ -86,7 +88,7 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
 
     while True:
         # run policy
-        single_obs = obs[0][-62:]
+        single_obs = obs[0][-94:]
         expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
         recorded_obs_episode[0,idx,:] = single_obs
         recorded_acs_episode[0,idx,:] = expert_action
@@ -138,7 +140,7 @@ class LeggedRunner(BaseLowdimRunner):
             device=None,
         ):
         super().__init__(output_dir)
-        self.generate_data = True
+        self.generate_data = False
         if not self.generate_data:            
             env = CassieEnv(max_timesteps=EP_LEN_MAX,
                             is_visual=False,
@@ -149,7 +151,7 @@ class LeggedRunner(BaseLowdimRunner):
             env.num_envs = 1
             env.max_episode_length = EP_LEN_MAX
 
-            model_dir = model_folder + 'trial3_baseline_dynrand_perturb_rnds1'
+            model_dir = model_folder + 'walking_finetune_stable'
             latest_checkpoint = tf.train.latest_checkpoint(model_dir)
             model_path = latest_checkpoint
             config = tf.ConfigProto(device_count={'GPU': 0})
@@ -157,7 +159,7 @@ class LeggedRunner(BaseLowdimRunner):
             ob_space_pol = env.observation_space_pol
             ac_space = env.action_space
 
-            env.num_obs = 62 # obs base shape
+            env.num_obs = 94 # obs base shape
             env.num_actions = env.action_space.shape[0]
 
             ob_space_vf = env.observation_space_vf
@@ -188,7 +190,7 @@ class LeggedRunner(BaseLowdimRunner):
         assert generate_data == self.generate_data, "generate data?"
 
         save_zarr = generate_data or (not online)
-        len_to_save = 1200 if not generate_data else 1e7
+        len_to_save = 1200 if not generate_data else 5e6
         
         if not self.generate_data:
             obs_vf, obs = env.reset()
@@ -204,7 +206,7 @@ class LeggedRunner(BaseLowdimRunner):
             action_history = torch.zeros((env.num_envs, history, env.num_actions), dtype=torch.float32, device=device)
             
             # state_history[:,:,:] = obs[:,None,:]
-            single_obs = obs[0][None, -62:]
+            single_obs = obs[0][None, -94:]
             state_history[:,:,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
             
             obs_dict = {"obs": state_history[:, :]} #, 'past_action': action_history}
@@ -263,7 +265,7 @@ class LeggedRunner(BaseLowdimRunner):
                 with torch.no_grad():
                     expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
                     if online:    
-                        obs_dict = {"obs": state_history[:, -9:-1, :]}
+                        obs_dict = {"obs": state_history[:, -history-1:-1, :]}
                         t1 = time.perf_counter()
                         action_dict = policy.predict_action(obs_dict)
                         t2 = time.perf_counter()
@@ -297,7 +299,7 @@ class LeggedRunner(BaseLowdimRunner):
                     state_history = torch.roll(state_history, shifts=-1, dims=1)
                     action_history = torch.roll(action_history, shifts=-1, dims=1)
                     
-                    single_obs = obs[0][None, -62:]
+                    single_obs = obs[0][None, -94:]
                     state_history[:,-1,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[:, -1, :] = torch.from_numpy(action_step).to(device)[None, :]
                     single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")}
@@ -308,7 +310,7 @@ class LeggedRunner(BaseLowdimRunner):
                 if done:
                     env.reset()
             
-                    single_obs = obs[0][None, -62:]
+                    single_obs = obs[0][None, -94:]
                     state_history[0,:,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[0,:,:] = 0.0
                 

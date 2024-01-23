@@ -22,7 +22,7 @@ ema:
   power: 0.75
   update_after_step: 0
 exp_name: default
-horizon: 12
+horizon: 20
 keypoint_visible_rate: 1.0
 logging:
   group: null
@@ -40,10 +40,10 @@ multi_run:
   wandb_name_base: 2023.01.16-20.11.42_train_diffusion_transformer_lowdim_pusht_lowdim
 n_action_steps: 8
 n_latency_steps: 0
-n_obs_steps: 8
+n_obs_steps: 16
 name: train_diffusion_transformer_lowdim
 obs_as_cond: true
-obs_dim: 94
+obs_dim: 32
 optimizer:
   betas:
   - 0.9
@@ -54,18 +54,18 @@ past_action_visible: false
 policy:
   _target_: diffusion_policy.policy.diffusion_transformer_lowdim_policy.DiffusionTransformerLowdimPolicy
   action_dim: 10
-  horizon: 12
+  horizon: 20
   model:
     _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
     causal_attn: true
-    cond_dim: 94
-    horizon: 12
+    cond_dim: 32
+    horizon: 20
     input_dim: 10
     n_cond_layers: 0
     n_emb: 256
     n_head: 8
     n_layer: 6
-    n_obs_steps: 8
+    n_obs_steps: 16
     obs_as_cond: true
     output_dim: 10
     p_drop_attn: 0.3
@@ -73,7 +73,7 @@ policy:
     time_as_cond: true
     separate_goal_conditioning: true
   n_action_steps: 8
-  n_obs_steps: 8
+  n_obs_steps: 16
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
     beta_end: 0.02
@@ -85,20 +85,20 @@ policy:
     variance_type: fixed_small
   num_inference_steps: 10
   obs_as_cond: true
-  obs_dim: 94
+  obs_dim: 32
   pred_action_steps_only: false
 pred_action_steps_only: false
 task:
   action_dim: 10
   dataset:
-    _target_: diffusion_policy.dataset.pusht_dataset.PushTLowdimDataset
-    horizon: 12
+    _target_: diffusion_policy.dataset.pusht_dataset_reduced.PushTLowdimDataset
+    horizon: 20
     max_train_episodes: 90
     pad_after: 7
     pad_before: 1
     seed: 42
     val_ratio: 0.02
-    zarr_path: recorded_data23-25-52_stable.zarr
+    zarr_path: recorded_data07-55-20_cassie_5e6.zarr
   env_runner:
     _target_: diffusion_policy.env_runner.diffsionrobot_lowdim_cassie_runner_mp.LeggedRunner
     agent_keypoints: false
@@ -109,7 +109,7 @@ task:
     n_action_steps: 8
     n_envs: null
     n_latency_steps: 0
-    n_obs_steps: 8
+    n_obs_steps: 16
     n_test: 50
     n_test_vis: 4
     n_train: 6
@@ -119,7 +119,7 @@ task:
     train_start_seed: 0
   keypoint_dim: 2
   name: pusht_lowdim
-  obs_dim: 94
+  obs_dim: 32
 task_name: pusht_lowdim
 training:
   checkpoint_every: 10
