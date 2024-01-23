@@ -95,7 +95,6 @@ class LeggedRunner(BaseLowdimRunner):
 
         pbar = tqdm.tqdm(total=self.max_steps, desc=f"Eval IsaacGym", 
             leave=False, mininterval=self.tqdm_interval_sec)
-        done = False
         
         history = self.n_obs_steps
         state_history = torch.zeros((env.num_envs, history+1, env.num_obs), dtype=torch.float32, device=device)
@@ -162,6 +161,8 @@ class LeggedRunner(BaseLowdimRunner):
                     
                     pred_action = action_dict["action_pred"]
                     action = pred_action[:,history:history+3,:]
+                    if action.shape[1] == 0:
+                        action = pred_action[:,-1:,:] # BC policy
                 else:
                     action = expert_action[:, None, :]
             if save_zarr:
