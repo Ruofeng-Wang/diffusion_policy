@@ -17,6 +17,8 @@ import torch
 import torch.onnx
 import dill
 from omegaconf import OmegaConf
+import onnxruntime
+
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 
 @click.command()
@@ -53,24 +55,53 @@ def main(checkpoint, output_dir, device):
 
     model = model.eval()
 
-    # sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
-    # timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    # cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
+    sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
+    timestep = torch.rand((1, ), dtype=torch.float32, device=device)
+    cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
 
-    # torch_out = model.forward(sample, timestep, cond)
+    torch_out = model.forward(sample, timestep, cond)
 
-    torch.save(model, "./cassie_ckpts/converted_model.pt")
-    config_dict = {'horizon': cfg['policy']['horizon'], 
-                   'n_obs_steps': cfg['policy']['n_obs_steps'],
-                   'num_inference_steps': cfg['policy']['num_inference_steps'],
-                   }
-    normalizer_ckpt = {k: v for k, v in payload['state_dicts']['model'].items() if "normalizer" in k}
-    torch.save((config_dict, normalizer_ckpt), "./cassie_ckpts/config_dict.pt")
+    torch.save(model, "./checkpoints/converted_model.pt")
 
+
+    onnx_file = "./checkpoints/model.onnx"
 
     # model = torch.load("model_full.pt")
 
 
+    # Export model as ONNX file ----------------------------------------------------
+    torch.onnx.export(
+        model, 
+        (sample, timestep, cond),
+        onnx_file, 
+        input_names=["sample", "timestep", "cond"], 
+        output_names=["action"], 
+        do_constant_folding=True, 
+        verbose=True, 
+        keep_initializers_as_inputs=True, 
+        opset_version=17, 
+        dynamic_axes={}
+        )
+
+    print("Succeeded converting model into ONNX!")
+
+    ort_session = onnxruntime.InferenceSession(onnx_file, providers=["CPUExecutionProvider"])
+
+    # compute ONNX Runtime output prediction
+    ort_inputs = {
+        ort_session.get_inputs()[0].name: sample.detach().cpu().numpy(),
+        ort_session.get_inputs()[1].name: timestep.detach().cpu().numpy(),
+        ort_session.get_inputs()[2].name: cond.detach().cpu().numpy(),
+        }
+    ort_outs = ort_session.run(None, ort_inputs)
+    
+    np.testing.assert_allclose(torch_out.detach().cpu().numpy(), ort_outs[0], rtol=1e-03, atol=1e-05)
+
+    print("test passed")
+
+
+
 if __name__ == '__main__':
     main()
+
 

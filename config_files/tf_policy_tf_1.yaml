@@ -22,27 +22,27 @@ ema:
   power: 0.75
   update_after_step: 0
 exp_name: default
-horizon: 16
+horizon: 8
 keypoint_visible_rate: 1.0
 logging:
   group: null
   id: null
   mode: online
-  name: 2023.01.16-20.11.42_train_diffusion_transformer_lowdim_pusht_lowdim
+  name: 2023.01.16-20.11.42_train_diffusion_transformer_lowdim_tf_go1
   project: diffusion_policy_debug
   resume: true
   tags:
   - train_diffusion_transformer_lowdim
-  - pusht_lowdim
+  - tf_go1
   - default
 multi_run:
-  run_dir: data/outputs/2023.01.16/20.11.42_train_diffusion_transformer_lowdim_pusht_lowdim
-  wandb_name_base: 2023.01.16-20.11.42_train_diffusion_transformer_lowdim_pusht_lowdim
+  run_dir: data/outputs/2023.01.16/20.11.42_train_diffusion_transformer_lowdim_tf_go1
+  wandb_name_base: 2023.01.16-20.11.42_train_diffusion_transformer_lowdim_tf_go1
 n_action_steps: 8
 n_latency_steps: 0
 n_obs_steps: 8
 name: train_diffusion_transformer_lowdim
-obs_as_cond: true
+obs_as_cond: false
 obs_dim: 42
 optimizer:
   betas:
@@ -52,25 +52,25 @@ optimizer:
   weight_decay: 0.001
 past_action_visible: false
 policy:
-  _target_: diffusion_policy.policy.diffusion_transformer_lowdim_policy.DiffusionTransformerLowdimPolicy
+  _target_: diffusion_policy.policy.bc_lowdim_policy.DiffusionTransformerLowdimPolicy
   action_dim: 12
-  horizon: 16
+  horizon: 8
   model:
-    _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
+    _target_: diffusion_policy.model.direct.transformer.TransformerForDiffusion
     causal_attn: true
-    cond_dim: 42
-    horizon: 16
-    input_dim: 12
+    cond_dim: 0
+    horizon: 8
+    input_dim: 42
     n_cond_layers: 0
     n_emb: 256
     n_head: 8
-    n_layer: 6
+    n_layer: 8
     n_obs_steps: 8
-    obs_as_cond: true
+    obs_as_cond: false
     output_dim: 12
     p_drop_attn: 0.3
     p_drop_emb: 0.0
-    time_as_cond: true
+    time_as_cond: false
   n_action_steps: 8
   n_obs_steps: 8
   noise_scheduler:
@@ -83,7 +83,7 @@ policy:
     prediction_type: epsilon
     variance_type: fixed_small
   num_inference_steps: 20
-  obs_as_cond: true
+  obs_as_cond: false
   obs_dim: 42
   pred_action_steps_only: false
 pred_action_steps_only: false
@@ -91,7 +91,7 @@ task:
   action_dim: 12
   dataset:
     _target_: diffusion_policy.dataset.pusht_dataset.PushTLowdimDataset
-    horizon: 16
+    horizon: 8
     max_train_episodes: 90
     pad_after: 7
     pad_before: 1
@@ -117,9 +117,9 @@ task:
     test_start_seed: 100000
     train_start_seed: 0
   keypoint_dim: 2
-  name: pusht_lowdim
+  name: tf_go1
   obs_dim: 42
-task_name: pusht_lowdim
+task_name: tf_go1
 training:
   checkpoint_every: 10
   debug: false
