@@ -20,12 +20,12 @@ import zarr, time
 
 from baselines.common import tf_util as U
 import tensorflow as tf
-from cassie_env.cassie_env import CassieEnv
+from cassie_run_env.cassie_env import CassieEnv
 import time
 import numpy as np
 import argparse
-import ppo.policies as policies 
-from cassie_env import CASSIE_GYM_ROOT_DIR
+import  cassie_run_env.ppo.policies as policies 
+from cassie_run_env import CASSIE_GYM_ROOT_DIR
 import multiprocessing
 import random
 import os
@@ -33,7 +33,8 @@ import os
 
 library_folder = CASSIE_GYM_ROOT_DIR + '/motions/MotionLibrary/'
 model_folder = CASSIE_GYM_ROOT_DIR + '/tf_model/'
-EP_LEN_MAX = 2000
+EP_LEN_MAX = 2500
+model_name = 'running_400m_stable'
 
 
 def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
@@ -47,18 +48,18 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
     
     perturb_flag = np.random.choice([True, False], p=[0.2, 0.8])
         
-    env = CassieEnv(max_timesteps=EP_LEN_MAX,
+    env = CassieEnv(max_timesteps=EP_LEN_MAX, 
                     is_visual=False,
-                    ref_file=library_folder+'GaitLibrary.gaitlib',
-                    stage='dynrand_perturb' if perturb_flag else 'dynrand', 
-                    method='baseline')
+                    ref_file=library_folder+'RunMocapMotion.motionlib', 
+                    overwrite_pos_by_cmd=True,
+                    stage='dyynrand')
 
     env.num_envs = 1
     env.max_episode_length = EP_LEN_MAX
 
     obs_vf, obs = env.reset()
 
-    model_dir = model_folder + 'walking_finetune_stable'
+    model_dir = model_folder + model_name
     latest_checkpoint = tf.train.latest_checkpoint(model_dir)
     model_path = latest_checkpoint
     config = tf.ConfigProto(device_count={'GPU': 0})
@@ -66,7 +67,7 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
     ob_space_pol = env.observation_space_pol
     ac_space = env.action_space
 
-    env.num_obs = 94 # obs base shape
+    env.num_obs = 64 # obs base shape
     env.num_actions = env.action_space.shape[0]
 
     ob_space_vf = env.observation_space_vf
@@ -88,7 +89,12 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
 
     while True:
         # run policy
-        single_obs = obs[0][-94:]
+        single_obs = obs[0][-62:]
+        extra_obs = np.array(env.obs_cassie_state.pelvis.rotationalVelocity).flatten()
+
+        single_obs = np.concatenate([single_obs[:,:6], extra_obs[None,:], single_obs[:,6:-1]], axis=-1)
+        breakpoint()
+
         expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
         recorded_obs_episode[0,idx,:] = single_obs
         recorded_acs_episode[0,idx,:] = expert_action
@@ -142,16 +148,16 @@ class LeggedRunner(BaseLowdimRunner):
         super().__init__(output_dir)
         self.generate_data = False
         if not self.generate_data:            
-            env = CassieEnv(max_timesteps=EP_LEN_MAX,
-                            is_visual=False,
-                            ref_file=library_folder+'GaitLibrary.gaitlib',
-                            stage='dynrand', 
-                            method='baseline')
+            env = CassieEnv(max_timesteps=EP_LEN_MAX, 
+                    is_visual=True,
+                    ref_file=library_folder+'RunMocapMotion.motionlib', 
+                    overwrite_pos_by_cmd=True,
+                    stage='dynrand')
 
             env.num_envs = 1
             env.max_episode_length = EP_LEN_MAX
 
-            model_dir = model_folder + 'walking_finetune_stable'
+            model_dir = model_folder + model_name
             latest_checkpoint = tf.train.latest_checkpoint(model_dir)
             model_path = latest_checkpoint
             config = tf.ConfigProto(device_count={'GPU': 0})
@@ -159,13 +165,13 @@ class LeggedRunner(BaseLowdimRunner):
             ob_space_pol = env.observation_space_pol
             ac_space = env.action_space
 
-            env.num_obs = 94 # obs base shape
+            env.num_obs = 64 # obs base shape
             env.num_actions = env.action_space.shape[0]
 
             ob_space_vf = env.observation_space_vf
             ob_space_pol_cnn = env.observation_space_pol_cnn
             self.pi = policies.MLPCNNPolicy(name='pi', ob_space_vf=ob_space_vf, ob_space_pol=ob_space_pol, ob_space_pol_cnn=ob_space_pol_cnn, 
-                                        ac_space=ac_space, hid_size=512, num_hid_layers=2)
+                                ac_space=ac_space, hid_size=512, num_hid_layers=2)
 
             U.make_session(config=config)
             U.load_state(model_path)
@@ -190,7 +196,7 @@ class LeggedRunner(BaseLowdimRunner):
         assert generate_data == self.generate_data, "generate data?"
 
         save_zarr = generate_data or (not online)
-        len_to_save = 1200 if not generate_data else 5e6
+        len_to_save = 1200 if not generate_data else 1e6
         
         if not self.generate_data:
             obs_vf, obs = env.reset()
@@ -206,7 +212,10 @@ class LeggedRunner(BaseLowdimRunner):
             action_history = torch.zeros((env.num_envs, history, env.num_actions), dtype=torch.float32, device=device)
             
             # state_history[:,:,:] = obs[:,None,:]
-            single_obs = obs[0][None, -94:]
+            single_obs = obs[0][None, -62:]
+            extra_obs = np.array(env.obs_cassie_state.pelvis.rotationalVelocity).flatten()
+
+            single_obs = np.concatenate([single_obs[:,:6], extra_obs[None,:], single_obs[:,6:-1]], axis=-1)
             state_history[:,:,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
             
             obs_dict = {"obs": state_history[:, :]} #, 'past_action': action_history}
@@ -296,12 +305,16 @@ class LeggedRunner(BaseLowdimRunner):
                     action_step = action_step[0]
                     _, obs, reward, done, info = env.step(action_step)
 
-                    # draw_state = env.render()
+                    draw_state = env.render()
                     
                     state_history = torch.roll(state_history, shifts=-1, dims=1)
                     action_history = torch.roll(action_history, shifts=-1, dims=1)
                     
-                    single_obs = obs[0][None, -94:]
+                    single_obs = obs[0][None, -62:]
+                    extra_obs = np.array(env.obs_cassie_state.pelvis.rotationalVelocity).flatten()
+
+                    single_obs = np.concatenate([single_obs[:,:6], extra_obs[None,:], single_obs[:,6:-1]], axis=-1)
+
                     state_history[:,-1,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[:, -1, :] = torch.from_numpy(action_step).to(device)[None, :]
                     single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")}
@@ -312,7 +325,11 @@ class LeggedRunner(BaseLowdimRunner):
                 if done:
                     env.reset()
             
-                    single_obs = obs[0][None, -94:]
+                    single_obs = obs[0][None, -62:]
+                    extra_obs = np.array(env.obs_cassie_state.pelvis.rotationalVelocity).flatten()
+
+                    single_obs = np.concatenate([single_obs[:,:6], extra_obs[None,:], single_obs[:,6:-1]], axis=-1)
+
                     state_history[0,:,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[0,:,:] = 0.0
                 
@@ -345,7 +362,7 @@ class LeggedRunner(BaseLowdimRunner):
                    
                     zdata["state"] = recorded_obs[:,:29]
                     zdata["cmd"] = recorded_obs[:,-5:]
-                    zdata["reference"] = recorded_obs[:,29:-5]  
+                    zdata["reference"] = recorded_obs[:,29:-5]
                     zdata["action"] = recorded_acs
                     zmeta["episode_ends"] = episode_ends
                     print(zroot.tree())
@@ -367,7 +384,7 @@ class LeggedRunner(BaseLowdimRunner):
             
             zdata["state"] = recorded_obs[:,:29]
             zdata["cmd"] = recorded_obs[:,-5:]
-            zdata["reference"] = recorded_obs[:,29:-5]  
+            zdata["reference"] = recorded_obs[:,29:-5]            
             zdata["action"] = recorded_acs
             zmeta["episode_ends"] = episode_ends
             print(zroot.tree())

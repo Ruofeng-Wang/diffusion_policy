@@ -38,7 +38,7 @@ def main(checkpoint, output_dir, device):
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
     # action_steps = 4
-    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_cassie_runner_mp.LeggedRunner'
+    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_run_cassie_runner_mp.LeggedRunner'
     # cfg['n_action_steps'] = action_steps
     # cfg['task']['env_runner']['n_action_steps'] = action_steps
     # cfg['policy']['n_action_steps'] = action_steps
