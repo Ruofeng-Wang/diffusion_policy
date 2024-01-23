@@ -24,11 +24,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
             time_as_cond: bool=True,
             obs_as_cond: bool=False,
             n_cond_layers: int = 0, 
-<<<<<<< HEAD
-            separate_goal_conditioning: bool = False,
-=======
             separate_goal_conditioning: bool = False
->>>>>>> 4df805c3014d08c75757bab4df1299f34c1082d9
         ) -> None:
         super().__init__()
 
