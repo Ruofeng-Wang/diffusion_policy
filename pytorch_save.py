@@ -55,16 +55,16 @@ def main(checkpoint, output_dir, device):
 
     model = model.eval()
 
-    sample = torch.rand((1, 16, 10), dtype=torch.float32, device=device)
+    sample = torch.rand((1, 12, 12), dtype=torch.float32, device=device)
     timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    cond = torch.rand((1, 8, 62), dtype=torch.float32, device=device)
+    cond = torch.rand((1, 8, 42), dtype=torch.float32, device=device)
 
     torch_out = model.forward(sample, timestep, cond)
 
-    torch.save(model, "./checkpoints/converted_model.pt")
+    torch.save(model, "./go1_ckpts/converted_model.pt")
 
 
-    onnx_file = "./checkpoints/model.onnx"
+    onnx_file = "./go1_ckpts/model.onnx"
 
     # model = torch.load("model_full.pt")
 

@@ -29,11 +29,21 @@ from cassie_run_env import CASSIE_GYM_ROOT_DIR
 import multiprocessing
 import random
 import os
+import pickle
 
+f = open("walk_cmd.pkl", "rb")
+cmd_obs = []
+while True:
+    try:
+        cmd_obs.append(pickle.load(f))
+    except:
+        break
+cmd_obs = np.stack(cmd_obs)
+cmd_idx = 0
 
 library_folder = CASSIE_GYM_ROOT_DIR + '/motions/MotionLibrary/'
 model_folder = CASSIE_GYM_ROOT_DIR + '/tf_model/'
-EP_LEN_MAX = 2500
+EP_LEN_MAX = 1000
 model_name = 'running_400m_stable'
 
 
@@ -52,7 +62,7 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
                     is_visual=False,
                     ref_file=library_folder+'RunMocapMotion.motionlib', 
                     overwrite_pos_by_cmd=True,
-                    stage='dyynrand')
+                    stage='single')
 
     env.num_envs = 1
     env.max_episode_length = EP_LEN_MAX
@@ -93,7 +103,6 @@ def generate_data_mujoco(recorded_obs, recorded_acs, len_to_save):
         extra_obs = np.array(env.obs_cassie_state.pelvis.rotationalVelocity).flatten()
 
         single_obs = np.concatenate([single_obs[:,:6], extra_obs[None,:], single_obs[:,6:-1]], axis=-1)
-        breakpoint()
 
         expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
         recorded_obs_episode[0,idx,:] = single_obs
@@ -152,7 +161,7 @@ class LeggedRunner(BaseLowdimRunner):
                     is_visual=True,
                     ref_file=library_folder+'RunMocapMotion.motionlib', 
                     overwrite_pos_by_cmd=True,
-                    stage='dynrand')
+                    stage='single')
 
             env.num_envs = 1
             env.max_episode_length = EP_LEN_MAX
@@ -269,13 +278,14 @@ class LeggedRunner(BaseLowdimRunner):
             action_error = []
             idx = 0    
             saved_idx = 0    
-            skip = 5
+            skip_epi = 0
+            skip = 0
             t1 = time.perf_counter()
             while True:
                 # run policy
                 with torch.no_grad():
                     expert_action = expert_policy.act(stochastic=False, ob_vf=obs_vf, ob_pol=obs)[0]
-                    if online:    
+                    if online and idx > skip:    
                         obs_dict = {"obs": state_history[:, -history-1:-1, :]}
                         t1 = time.perf_counter()
                         action_dict = policy.predict_action(obs_dict)
@@ -289,9 +299,10 @@ class LeggedRunner(BaseLowdimRunner):
                         #     action_dict = policy.predict_action(obs_dict)
                         
                         pred_action = action_dict["action_pred"]
-                        action = pred_action[:,history:history+6,:]
+                        action = pred_action[:,history:history+1,:].cpu().numpy()
                     else:
                         action = expert_action[None, None, :]
+                        time.sleep(0.01)
                 if save_zarr:
                     curr_idx = np.all(recorded_obs_episode == 0, axis=-1).argmax(axis=-1)
                     # curr_idx = idx
@@ -315,6 +326,19 @@ class LeggedRunner(BaseLowdimRunner):
 
                     single_obs = np.concatenate([single_obs[:,:6], extra_obs[None,:], single_obs[:,6:-1]], axis=-1)
 
+                    # import  pickle
+                    # if skip_epi > 2:
+                    #     print("saving data")
+                        # with open("run_cmd.pkl", "ab") as f:
+                        #     pickle.dump(single_obs[:,-36:], f)
+                    
+                    global cmd_idx
+                    if idx < 350:
+                        single_obs[:,-36:] = cmd_obs[cmd_idx]
+                        cmd_idx += 1
+                        print('start running')
+                    print(idx)
+
                     state_history[:,-1,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[:, -1, :] = torch.from_numpy(action_step).to(device)[None, :]
                     single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")}
@@ -323,6 +347,11 @@ class LeggedRunner(BaseLowdimRunner):
                 # reset env
                     
                 if done:
+
+                    cmd_idx = 0
+                    idx = 0
+
+                    skip_epi += 1
                     env.reset()
             
                     single_obs = obs[0][None, -62:]
@@ -348,6 +377,7 @@ class LeggedRunner(BaseLowdimRunner):
                     episode_ends.append(saved_idx)
                     
                     print("saved_idx: ", saved_idx)
+                    idx = 0
 
             # update pbar
                 if online:

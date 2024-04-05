@@ -81,7 +81,13 @@ class BaseWorkspace:
 
         for key, value in payload['state_dicts'].items():
             if key not in exclude_keys:
-                self.__dict__[key].load_state_dict(value, **kwargs)
+                try:
+                    self.__dict__[key].load_state_dict(value, **kwargs)
+                    print(f"Loaded {key}")
+                except Exception as e:
+                    print(e) 
+                    pass
+                    print(f"Failed to load {key}")
         for key in include_keys:
             if key in payload['pickles']:
                 self.__dict__[key] = dill.loads(payload['pickles'][key])

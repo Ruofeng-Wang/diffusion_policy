@@ -29,7 +29,17 @@ from cassie_env import CASSIE_GYM_ROOT_DIR
 import multiprocessing
 import random
 import os
+import pickle
 
+f = open("run_cmd.pkl", "rb")
+cmd_obs = []
+while True:
+    try:
+        cmd_obs.append(pickle.load(f))
+    except:
+        break
+cmd_obs = np.stack(cmd_obs)
+cmd_idx = 0
 
 library_folder = CASSIE_GYM_ROOT_DIR + '/motions/MotionLibrary/'
 model_folder = CASSIE_GYM_ROOT_DIR + '/tf_model/'
@@ -145,7 +155,7 @@ class LeggedRunner(BaseLowdimRunner):
             env = CassieEnv(max_timesteps=EP_LEN_MAX,
                             is_visual=True,
                             ref_file=library_folder+'GaitLibrary.gaitlib',
-                            stage='dynrand', 
+                            stage='single', 
                             method='baseline')
 
             env.num_envs = 1
@@ -159,7 +169,7 @@ class LeggedRunner(BaseLowdimRunner):
             ob_space_pol = env.observation_space_pol
             ac_space = env.action_space
 
-            env.num_obs = 32 # obs base shape
+            env.num_obs = 64 # obs base shape
             env.num_actions = env.action_space.shape[0]
 
             ob_space_vf = env.observation_space_vf
@@ -212,7 +222,8 @@ class LeggedRunner(BaseLowdimRunner):
                                   np.array(env.obs_cassie_state.motor.velocity).flatten()])
 
             single_obs = obs[0][None, -94:]
-            single_obs = np.concatenate([ob_curr[None, :], single_obs[:,-5:]], axis=-1)
+            # single_obs = np.concatenate([ob_curr[None, :], single_obs[:,-5:]], axis=-1)
+            single_obs = np.concatenate([single_obs[:,:29], single_obs[:,29:39], single_obs[:,49:59], single_obs[:,69:79], single_obs[:,89:94]], axis=-1)
             state_history[:,:,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
             
             obs_dict = {"obs": state_history[:, :]} #, 'past_action': action_history}
@@ -286,7 +297,7 @@ class LeggedRunner(BaseLowdimRunner):
                         #     action_dict = policy.predict_action(obs_dict)
                         
                         pred_action = action_dict["action_pred"]
-                        action = pred_action[:,history:history+2,:].cpu().numpy()
+                        action = pred_action[:,history:history+1,:].cpu().numpy()
                     else:
                         action = expert_action[None, None, :]
                 if save_zarr:
@@ -313,7 +324,22 @@ class LeggedRunner(BaseLowdimRunner):
                         np.array(env.obs_cassie_state.motor.velocity).flatten()])
 
                     single_obs = obs[0][None, -94:]
-                    single_obs = np.concatenate([ob_curr[None, :], single_obs[:,-5:]], axis=-1)
+                    # single_obs = np.concatenate([ob_curr[None, :], single_obs[:,-5:]], axis=-1)
+                    single_obs = np.concatenate([single_obs[:,:29], single_obs[:,29:39], single_obs[:,49:59], single_obs[:,69:79], single_obs[:,89:94]], axis=-1)
+                    
+                    # global cmd_idx
+                    # if idx > 200:
+                    #     single_obs[:,-36:] = cmd_obs[cmd_idx]
+                    #     cmd_idx += 1
+                    #     print('start running')
+                    # print(idx)
+
+                    # import  pickle
+                    # print("saving data")
+                    # with open("walk_cmd.pkl", "ab") as f:
+                    #     pickle.dump(single_obs[:,-36:], f)
+
+
                     state_history[:,-1,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[:, -1, :] = torch.from_numpy(action_step).to(device)[None, :]
                     single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")}
@@ -323,6 +349,8 @@ class LeggedRunner(BaseLowdimRunner):
                     
                 if done:
                     env.reset()
+                    idx = 0
+                    cmd_idx = 0
             
                     ob_curr = np.concatenate([np.array(env.obs_cassie_state.pelvis.translationalVelocity).flatten(), 
                         np.array(env.obs_cassie_state.pelvis.orientation).flatten(), 
@@ -330,7 +358,8 @@ class LeggedRunner(BaseLowdimRunner):
                         np.array(env.obs_cassie_state.motor.velocity).flatten()])
 
                     single_obs = obs[0][None, -94:]
-                    single_obs = np.concatenate([ob_curr[None, :], single_obs[:,-5:]], axis=-1)
+                    # single_obs = np.concatenate([ob_curr[None, :], single_obs[:,-5:]], axis=-1)
+                    single_obs = np.concatenate([single_obs[:,:29], single_obs[:,29:39], single_obs[:,49:59], single_obs[:,69:79], single_obs[:,89:94]], axis=-1)
                     state_history[0,:,:] = torch.from_numpy(single_obs).to(device)[:, None, :] # (env.num_envs, 1, env.num_observations)
                     action_history[0,:,:] = 0.0
                 

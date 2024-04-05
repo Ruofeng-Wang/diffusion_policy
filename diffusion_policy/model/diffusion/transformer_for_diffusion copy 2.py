@@ -25,13 +25,11 @@ class TransformerForDiffusion(ModuleAttrMixin):
             obs_as_cond: bool=False,
             n_cond_layers: int = 0, 
             separate_goal_conditioning: bool = False,
-            is_cassie: bool = True,
-            is_ref: bool = False,
+            is_cassie: bool = True
         ) -> None:
         super().__init__()
 
         self.is_cassie = is_cassie
-        self.is_ref = is_ref
         self.separate_goal_conditioning = separate_goal_conditioning
 
         # compute number of tokens for main trunk and condition encoder
@@ -47,10 +45,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
         if obs_as_cond:
             assert time_as_cond
             if separate_goal_conditioning:
-                if self.is_cassie and self.is_ref:
-                    T_cond += n_obs_steps*3
-                else:
-                    T_cond += n_obs_steps*2
+                T_cond += n_obs_steps*2
             else:
                 T_cond += n_obs_steps
 
@@ -70,14 +65,8 @@ class TransformerForDiffusion(ModuleAttrMixin):
                 self.cond_obs_emb_2 = nn.Linear(3, n_emb)
             elif separate_goal_conditioning and self.is_cassie:
                 print("\n\nseparate goal conditioning, CASSIE!!!! ")
-                if self.is_ref:
-                    print("\n\nis REF")
-                    self.cond_obs_emb = nn.Linear(cond_dim-5-30, n_emb)
-                    self.cond_obs_emb_2 = nn.Linear(5, n_emb)
-                    self.cond_obs_emb_3 = nn.Linear(30, n_emb)
-                else:
-                    self.cond_obs_emb = nn.Linear(cond_dim-5, n_emb)
-                    self.cond_obs_emb_2 = nn.Linear(5, n_emb)
+                self.cond_obs_emb = nn.Linear(cond_dim-5, n_emb)
+                self.cond_obs_emb_2 = nn.Linear(5, n_emb)
             else:
                 self.cond_obs_emb = nn.Linear(cond_dim, n_emb)
 
@@ -151,10 +140,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
             
             if time_as_cond and obs_as_cond:
                 if separate_goal_conditioning:
-                    if self.is_cassie and self.is_ref:
-                        S = (T_cond-1) // 3 + 1
-                    else:
-                        S = (T_cond-1) // 2 + 1
+                    S = (T_cond-1) // 2 + 1
                 else:
                     S = T_cond
                 t, s = torch.meshgrid(
@@ -165,17 +151,10 @@ class TransformerForDiffusion(ModuleAttrMixin):
                 mask = t >= (s-1) # add one dimension since time is the first token in cond
                 
                 if separate_goal_conditioning:
-                    if self.is_cassie and self.is_ref:
-                        new_mask = torch.zeros((mask.shape[0], (mask.shape[1]-1)*3 + 1), dtype=torch.bool)
-                        new_mask[:,:mask.shape[1]] = mask
-                        new_mask[:,mask.shape[1]:mask.shape[1]*2-1] = mask[:,1:]
-                        new_mask[:,mask.shape[1]*2-1:mask.shape[1]*3-2] = mask[:,1:]
-                        mask = new_mask
-                    else:
-                        new_mask = torch.zeros((mask.shape[0], (mask.shape[1]-1)*2 + 1), dtype=torch.bool)
-                        new_mask[:,:mask.shape[1]] = mask
-                        new_mask[:,mask.shape[1]:] = mask[:,1:]
-                        mask = new_mask
+                    new_mask = torch.zeros((mask.shape[0], (mask.shape[1]-1)*2 + 1), dtype=torch.bool)
+                    new_mask[:,:mask.shape[1]] = mask
+                    new_mask[:,mask.shape[1]:] = mask[:,1:]
+                    mask = new_mask
                 mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
                 self.register_buffer('memory_mask', mask)
             else:
@@ -363,17 +342,10 @@ class TransformerForDiffusion(ModuleAttrMixin):
                     # (B,To,n_emb)
                     cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
                 elif self.separate_goal_conditioning and self.is_cassie:
-                    if self.is_ref:
-                        cond_obs_emb = self.cond_obs_emb(cond[...,:29])
-                        cond_obs_emb_3 = self.cond_obs_emb_3(cond[...,29:59])
-                        cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,59:])
-                        # (B,To,n_emb)
-                        cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2, cond_obs_emb_3], dim=1)
-                    else:
-                        cond_obs_emb = self.cond_obs_emb(cond[...,:-5])
-                        cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,-5:])
-                        # (B,To,n_emb)
-                        cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
+                    cond_obs_emb = self.cond_obs_emb(cond[...,:-5])
+                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,-5:])
+                    # (B,To,n_emb)
+                    cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
                 else:
                     cond_obs_emb = self.cond_obs_emb(cond)
                     # (B,To,n_emb)
