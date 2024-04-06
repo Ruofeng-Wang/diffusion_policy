@@ -1,3 +1,7 @@
+
+# conda environment
+.conda-env/
+
 checkpoints/
 
 bin
