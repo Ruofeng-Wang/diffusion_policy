@@ -29,7 +29,8 @@ from diffusion_policy.workspace.base_workspace import BaseWorkspace
 @click.option('-c', '--checkpoint', required=True)
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cuda:0')
-def main(checkpoint, output_dir, device):
+@click.option('--headless', default=False)
+def main(checkpoint, output_dir, device, **kwargs):
     # if os.path.exists(output_dir):
     #     click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -40,8 +41,9 @@ def main(checkpoint, output_dir, device):
     # action_steps = 4
 
     print(cfg['task']['env_runner']['_target_'], '\n\n')
-    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_run_cassie_runner_mp.LeggedRunner'
+    cfg['task']['env_runner']['_target_'] = 'diffusion_policy.env_runner.diffsionrobot_lowdim_cyber_runner.LeggedRunner'
     print(cfg['task']['env_runner']['n_obs_steps'])
+
     # cfg['n_action_steps'] = action_steps
     # cfg['task']['env_runner']['n_action_steps'] = action_steps
     # cfg['policy']['n_action_steps'] = action_steps

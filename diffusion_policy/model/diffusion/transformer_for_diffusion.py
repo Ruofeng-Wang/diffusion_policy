@@ -25,7 +25,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
             obs_as_cond: bool=False,
             n_cond_layers: int = 0, 
             separate_goal_conditioning: bool = False,
-            is_cassie: bool = True,
+            is_cassie: bool = False,
             is_ref: bool = False,
         ) -> None:
         super().__init__()
@@ -358,8 +358,8 @@ class TransformerForDiffusion(ModuleAttrMixin):
             cond_embeddings = time_emb
             if self.obs_as_cond:
                 if self.separate_goal_conditioning and not self.is_cassie:
-                    cond_obs_emb = self.cond_obs_emb(torch.cat([cond[...,:3], cond[...,6:]], dim=-1))
-                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,3:6])
+                    cond_obs_emb = self.cond_obs_emb(torch.cat([cond[...,:6], cond[...,9:]], dim=-1))
+                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,6:9])
                     # (B,To,n_emb)
                     cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
                 elif self.separate_goal_conditioning and self.is_cassie:
