@@ -22,8 +22,8 @@ import zarr, time
 from legged_gym.envs import *
 from legged_gym.utils import  get_args, export_policy_as_jit, task_registry, Logger
 
-task = 'hop'
-# task = 'bounce'
+# task = 'hop'
+task = 'bounce'
 # task = 'cyber2_stand_dance_aug'
 
 
@@ -146,8 +146,15 @@ class LeggedRunner(BaseLowdimRunner):
             # run policy
             with torch.no_grad():
                 expert_action = expert_policy.act_inference(obs.detach())
+
+                # if (task == 'hop' or task == 'bounce'):
+                #     expert_action = env.get_diffusion_action(expert_action)
+
                 # if idx % skip == 4: #not save_zarr and 
                 if online:    
+                    # if idx < 200:
+                    #     state_history[:, -policy.n_obs_steps-1:-1, 6:9]  = 0.
+                    #     state_history[:, -policy.n_obs_steps-1:-1, 6] = 0.5
                     obs_dict = {"obs": state_history[:, -policy.n_obs_steps-1:-1, :]}
                     t1 = time.perf_counter()
                     action_dict = policy.predict_action(obs_dict)
@@ -161,7 +168,7 @@ class LeggedRunner(BaseLowdimRunner):
                     #     action_dict = policy.predict_action(obs_dict)
                     
                     pred_action = action_dict["action_pred"]
-                    action = pred_action[:,history:history+1,:]
+                    action = pred_action[:,history:history+2,:]
                     # if action.shape[1] == 0:
                     #     action = pred_action[:,-1:,:] # BC policy
                 else:
@@ -171,23 +178,21 @@ class LeggedRunner(BaseLowdimRunner):
                 # curr_idx = idx
                 recorded_obs_episode[np.arange(env.num_envs),curr_idx,:] = single_obs_dict["obs"].to("cpu").detach().numpy()
                 recorded_acs_episode[np.arange(env.num_envs),curr_idx,:] = expert_action.to("cpu").detach().numpy()
-    
+
             # step env
             self.n_action_steps = action.shape[1]
             for i in range(self.n_action_steps):
                 action_step = action[:, i, :]
-                if online and (task == 'hop' or task == 'bounce'):
-                    obs, _, rews, done, infos = env.step_no_filter(action_step)
-                else:
-                    obs, _, rews, done, infos = env.step(action_step)
+                if (task == 'hop' or task == 'bounce'):
+                    action_step = env.get_diffusion_action(action_step)
+                
+                obs, _, rews, done, infos = env.step(action_step)
             
                 state_history = torch.roll(state_history, shifts=-1, dims=1)
                 action_history = torch.roll(action_history, shifts=-1, dims=1)
                 
                 state_history[:, -1, :] = env.get_diffusion_observation().to(device)
-
-                # print(state_history[:,-1,6:9])
-                action_history[:, -1, :] = env.get_diffusion_action().to(device)
+                action_history[:, -1, :] = action_step
                 single_obs_dict = {"obs": state_history[:, -1, :].to("cuda:0")}
             
                 idx += 1
