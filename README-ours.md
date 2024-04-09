@@ -19,6 +19,10 @@ python pytorch_save.py --checkpoint "checkpoints/latest.ckpt" --output_dir ""
 
 # Eval
 
+conda config --env --add channels robostack
+
+mamba install ros-noetic-ros-base
+
 ```bash
 python eval.py --checkpoint=data/outputs/2023.11.04/08.17.36_train_diffusion_unet_lowdim_pusht_lowdim/checkpoints/latest.ckpt -o eval_output_dir/
 ```
