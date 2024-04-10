@@ -8,7 +8,8 @@ import sys
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
 
-# from isaacgym.torch_utils import *
+import os
+
 
 import numpy as np
 import click
@@ -18,6 +19,9 @@ import torch.onnx
 import dill
 from omegaconf import OmegaConf
 import onnxruntime
+import tensorrt as trt
+from cuda import cudart
+
 
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 
@@ -26,6 +30,12 @@ from diffusion_policy.workspace.base_workspace import BaseWorkspace
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cpu')
 def main(checkpoint, output_dir, device):
+
+    model_name = "diffuse_model"
+
+    onnx_file = f"./cyberdog_ckpts/{model_name}.onnx"
+    trt_file = f"./cyberdog_ckpts/{model_name}.plan"
+
 
     
     # load checkpoint
@@ -57,14 +67,20 @@ def main(checkpoint, output_dir, device):
 
     sample = torch.rand((1, 12, 12), dtype=torch.float32, device=device)
     timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    cond = torch.rand((1, 8, 42), dtype=torch.float32, device=device)
+    cond = torch.rand((1, 8, 45), dtype=torch.float32, device=device)
 
     torch_out = model.forward(sample, timestep, cond)
 
-    torch.save(model, "./go1_ckpts/converted_model.pt")
+    torch.save(model, "./cyberdog_ckpts/converted_model.pt")
+
+    config_dict = {'horizon': cfg['policy']['horizon'], 
+                'n_obs_steps': cfg['policy']['n_obs_steps'],
+                'num_inference_steps': cfg['policy']['num_inference_steps'],
+                }
+    normalizer_ckpt = {k: v for k, v in payload['state_dicts']['model'].items() if "normalizer" in k}
+    torch.save((config_dict, normalizer_ckpt), "./checkpoints/config_dict.pt")
 
 
-    onnx_file = "./go1_ckpts/model.onnx"
 
     # model = torch.load("model_full.pt")
 
@@ -85,19 +101,91 @@ def main(checkpoint, output_dir, device):
 
     print("Succeeded converting model into ONNX!")
 
-    ort_session = onnxruntime.InferenceSession(onnx_file, providers=["CPUExecutionProvider"])
+    # ort_session = onnxruntime.InferenceSession(onnx_file, providers=["CPUExecutionProvider"])
 
-    # compute ONNX Runtime output prediction
-    ort_inputs = {
-        ort_session.get_inputs()[0].name: sample.detach().cpu().numpy(),
-        ort_session.get_inputs()[1].name: timestep.detach().cpu().numpy(),
-        ort_session.get_inputs()[2].name: cond.detach().cpu().numpy(),
-        }
-    ort_outs = ort_session.run(None, ort_inputs)
+    # # compute ONNX Runtime output prediction
+    # ort_inputs = {
+    #     ort_session.get_inputs()[0].name: sample.detach().cpu().numpy(),
+    #     ort_session.get_inputs()[1].name: timestep.detach().cpu().numpy(),
+    #     ort_session.get_inputs()[2].name: cond.detach().cpu().numpy(),
+    #     }
+    # ort_outs = ort_session.run(None, ort_inputs)
     
-    np.testing.assert_allclose(torch_out.detach().cpu().numpy(), ort_outs[0], rtol=1e-03, atol=1e-05)
+    # np.testing.assert_allclose(torch_out.detach().cpu().numpy(), ort_outs[0], rtol=1e-03, atol=1e-05)
 
-    print("test passed")
+    # print("test passed")
+
+
+
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+    torch.backends.cudnn.deterministic = True
+
+
+
+    # for FP16 mode
+    bUseFP16Mode = False
+    # for INT8 model
+    bUseINT8Mode = False
+    nCalibration = 1
+    cacheFile = "./int8.cache"
+
+    # os.system("rm -rf ./*.onnx ./*.plan ./*.cache")
+    np.set_printoptions(precision=3, linewidth=200, suppress=True)
+    cudart.cudaDeviceSynchronize()
+
+
+
+    # Parse network, rebuild network and do inference in TensorRT ------------------
+
+    logger = trt.Logger(trt.Logger.VERBOSE)
+    # logger = trt.Logger(trt.Logger.WARNING)
+    builder = trt.Builder(logger)
+
+    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+    profile = builder.create_optimization_profile()
+    config = builder.create_builder_config()
+    if bUseFP16Mode:
+        config.set_flag(trt.BuilderFlag.FP16)
+    if bUseINT8Mode:
+        import calibrator
+        config.set_flag(trt.BuilderFlag.INT8)
+        config.int8_calibrator = calibrator.MyCalibrator(nCalibration)
+
+    parser = trt.OnnxParser(network, logger)
+    if not os.path.exists(onnx_file):
+        print("Failed finding ONNX file!")
+        exit()
+    print("Succeeded finding ONNX file!")
+    with open(onnx_file, "rb") as model:
+        if not parser.parse(model.read()):
+            print("Failed parsing .onnx file!")
+            for error in range(parser.num_errors):
+                print(parser.get_error(error))
+            exit()
+        print("Succeeded parsing .onnx file!")
+
+    inputTensor_sample = network.get_input(0)
+    inputTensor_time = network.get_input(1)
+    inputTensor_cond = network.get_input(2)
+    opt_shape = [sample.shape[0], sample.shape[1], sample.shape[2]]
+    profile.set_shape(inputTensor_sample.name, opt_shape, opt_shape, opt_shape)
+    opt_shape = [timestep.shape[0]]
+    profile.set_shape(inputTensor_time.name, opt_shape, opt_shape, opt_shape)
+    opt_shape = [cond.shape[0], cond.shape[1], cond.shape[2]]
+    profile.set_shape(inputTensor_cond.name, opt_shape, opt_shape, opt_shape)
+    config.add_optimization_profile(profile)
+
+    #network.unmark_output(network.get_output(0))  # remove output tensor "y"
+    engineString = builder.build_serialized_network(network, config)
+    if engineString == None:
+        print("Failed building engine!")
+        exit()
+    print("Succeeded building engine!")
+    with open(trt_file, "wb") as f:
+        f.write(engineString)
+
 
 
 

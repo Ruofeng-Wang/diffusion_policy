@@ -130,6 +130,7 @@ class DiffusionTransformerLowdimPolicy(BaseLowdimPolicy):
             cond_mask[:,:To,Da:] = True
 
         # run sampling
+        breakpoint()
         nsample = self.conditional_sample(
             cond_data, 
             cond_mask,

@@ -64,7 +64,7 @@ class LeggedRunner(BaseLowdimRunner):
         if self.save_zarr:
             env_cfg.env.num_envs = 64
         else: # placeholder
-            env_cfg.env.num_envs = 4
+            env_cfg.env.num_envs = 1
 
         
         # breakpoint()
@@ -155,6 +155,8 @@ class LeggedRunner(BaseLowdimRunner):
                     # if idx < 200:
                     #     state_history[:, -policy.n_obs_steps-1:-1, 6:9]  = 0.
                     #     state_history[:, -policy.n_obs_steps-1:-1, 6] = 0.5
+                    print(state_history[:, :, :])
+                    breakpoint()
                     obs_dict = {"obs": state_history[:, -policy.n_obs_steps-1:-1, :]}
                     t1 = time.perf_counter()
                     action_dict = policy.predict_action(obs_dict)

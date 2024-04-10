@@ -392,7 +392,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
             t = token_embeddings.shape[1]
             position_embeddings = self.pos_emb[
                 :, :t, :
-            ]  # each position maps to a (learnable) vector
+            ]  # each position maps to a (learnable) vectorq
             x = self.drop(token_embeddings + position_embeddings)
             # (B,T,n_emb)
             x = self.decoder(
