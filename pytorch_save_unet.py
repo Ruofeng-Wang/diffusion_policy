@@ -29,7 +29,7 @@ from diffusion_policy.workspace.base_workspace import BaseWorkspace
 @click.option('-c', '--checkpoint', required=True)
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cpu')
-@click.option('-n', '--name', default="diffuse_model")
+@click.option('-n', '--name', default="go1_unet")
 def main(checkpoint, output_dir, device, name):
 
     model_name = name
@@ -68,10 +68,10 @@ def main(checkpoint, output_dir, device, name):
 
     sample = torch.rand((1, 12, 12), dtype=torch.float32, device=device)
     timestep = torch.rand((1, ), dtype=torch.float32, device=device)
-    cond = torch.rand((1, 8, 45), dtype=torch.float32, device=device)
+    cond = torch.rand((1, 336), dtype=torch.float32, device=device)
 
-    torch_out = model.forward(sample, timestep, cond)
-
+    model_output = model(sample, timestep, 
+        local_cond=None, global_cond=cond)
     torch.save(model, f"./checkpoint/{model_name}.pt")
 
     config_dict = {'horizon': cfg['policy']['horizon'], 
@@ -174,7 +174,7 @@ def main(checkpoint, output_dir, device, name):
     profile.set_shape(inputTensor_sample.name, opt_shape, opt_shape, opt_shape)
     opt_shape = [timestep.shape[0]]
     profile.set_shape(inputTensor_time.name, opt_shape, opt_shape, opt_shape)
-    opt_shape = [cond.shape[0], cond.shape[1], cond.shape[2]]
+    opt_shape = [cond.shape[0], cond.shape[1]]
     profile.set_shape(inputTensor_cond.name, opt_shape, opt_shape, opt_shape)
     config.add_optimization_profile(profile)
 

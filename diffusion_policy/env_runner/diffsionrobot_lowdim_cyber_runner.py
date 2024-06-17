@@ -23,7 +23,7 @@ from legged_gym.envs import *
 from legged_gym.utils import  get_args, export_policy_as_jit, task_registry, Logger
 
 # task = 'hop'
-task = 'bounce'
+task = 'trot'
 # task = 'cyber2_stand_dance_aug'
 
 
@@ -90,7 +90,7 @@ class LeggedRunner(BaseLowdimRunner):
         obs, _ = env.reset()
         past_action = None
         
-        expert_policy = torch.load('source_ckpts/{}.pt'.format(task), map_location=torch.device('cpu'))
+        expert_policy = torch.load('source_ckpts/{}.pt'.format("amp_policy"), map_location=torch.device('cpu'))
         expert_policy = expert_policy.to(device)
 
         pbar = tqdm.tqdm(total=self.max_steps, desc=f"Eval IsaacGym", 
@@ -153,10 +153,9 @@ class LeggedRunner(BaseLowdimRunner):
                 # if idx % skip == 4: #not save_zarr and 
                 if online:    
                     # if idx < 200:
-                    #     state_history[:, -policy.n_obs_steps-1:-1, 6:9]  = 0.
-                    #     state_history[:, -policy.n_obs_steps-1:-1, 6] = 0.5
-                    print(state_history[:, :, :])
-                    breakpoint()
+                    state_history[:, -policy.n_obs_steps-1:-1, 6:9]  = 0.
+                    state_history[:, -policy.n_obs_steps-1:-1, 6] = 0.5
+                    # print(state_history[:, :, :])
                     obs_dict = {"obs": state_history[:, -policy.n_obs_steps-1:-1, :]}
                     t1 = time.perf_counter()
                     action_dict = policy.predict_action(obs_dict)

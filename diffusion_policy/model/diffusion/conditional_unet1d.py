@@ -173,7 +173,7 @@ class ConditionalUnet1D(nn.Module):
     def forward(self, 
             sample: torch.Tensor, 
             timestep: Union[torch.Tensor, float, int], 
-            local_cond=None, global_cond=None, **kwargs):
+            global_cond=None, **kwargs):
         """
         x: (B,T,input_dim)
         timestep: (B,) or int, diffusion step
@@ -202,13 +202,6 @@ class ConditionalUnet1D(nn.Module):
         
         # encode local features
         h_local = list()
-        if local_cond is not None:
-            local_cond = einops.rearrange(local_cond, 'b h t -> b t h')
-            resnet, resnet2 = self.local_cond_encoder
-            x = resnet(local_cond, global_feature)
-            h_local.append(x)
-            x = resnet2(local_cond, global_feature)
-            h_local.append(x)
         
         x = sample
         h = []
