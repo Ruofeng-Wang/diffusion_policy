@@ -1,23 +1,16 @@
-# Diffusion Policy
+# DiffuseLoco: Real-Time Legged Locomotion Control with Diffusion from Offline Datasets
 
 [[Project page]](https://diffusion-policy.cs.columbia.edu/)
-[[Paper]](https://diffusion-policy.cs.columbia.edu/#paper)
+[[Paper]](https://arxiv.org/abs/2404.19264)
 [[Data]](https://diffusion-policy.cs.columbia.edu/data/)
-[[Colab (state)]](https://colab.research.google.com/drive/1gxdkgRVfM55zihY9TFLja97cSVZOZq2B?usp=sharing)
-[[Colab (vision)]](https://colab.research.google.com/drive/18GIHeOQ5DyjMN8iIRZL2EKZ0745NLIpg?usp=sharing)
 
+# Need to change link
+[Xiaoyu Huang](http://cheng-chi.github.io/)<sup>1</sup>,
+[Yufeng Chi](https://www.cs.cmu.edu/~sfeng/)<sup>1</sup>,
+[Ruofeng Wang](https://yilundu.github.io/)<sup>1</sup>,
 
-[Cheng Chi](http://cheng-chi.github.io/)<sup>1</sup>,
-[Siyuan Feng](https://www.cs.cmu.edu/~sfeng/)<sup>2</sup>,
-[Yilun Du](https://yilundu.github.io/)<sup>3</sup>,
-[Zhenjia Xu](https://www.zhenjiaxu.com/)<sup>1</sup>,
-[Eric Cousineau](https://www.eacousineau.com/)<sup>2</sup>,
-[Benjamin Burchfiel](http://www.benburchfiel.com/)<sup>2</sup>,
-[Shuran Song](https://www.cs.columbia.edu/~shurans/)<sup>1</sup>
-
-<sup>1</sup>Columbia University,
+<sup>1</sup>UC Berkeley,
 <sup>2</sup>Toyota Research Institute,
-<sup>3</sup>MIT
 
 <img src="media/teaser.png" alt="drawing" width="100%"/>
 <img src="media/multimodal_sim.png" alt="drawing" width="100%"/>
@@ -85,6 +78,8 @@ The `conda_environment_macos.yaml` file is only for development on MacOS and doe
 
 ### 🦾 Real Robot
 Hardware (for Push-T):
+* Unitree Go1(https://shop.unitree.com/products/unitreeyushutechnologydog-artificial-intelligence-companion-bionic-companion-intelligent-robot-go1-quadruped-robot-dog)
+* Xiaomi Cyberdog(https://in.event.mi.com/in/cyberdog)
 * 1x [UR5-CB3](https://www.universal-robots.com/cb3) or [UR5e](https://www.universal-robots.com/products/ur5-robot/) ([RTDE Interface](https://www.universal-robots.com/articles/ur/interface-communication/real-time-data-exchange-rtde-guide/) is required)
 * 2x [RealSense D415](https://www.intelrealsense.com/depth-camera-d415/)
 * 1x [3Dconnexion SpaceMouse](https://3dconnexion.com/us/product/spacemouse-wireless/) (for teleop)
@@ -406,13 +401,6 @@ The `get_obs` method returns the latest observation from `SharedMemoryRingBuffer
 
 The `exec_actions` method accepts a sequence of actions and timestamps for the expected time of execution for each step. Once called, the actions are simply enqueued to the `RTDEInterpolationController`, and the method returns without blocking for execution.
 
-## 🩹 Adding a Task
-Read and imitate:
-* `diffusion_policy/dataset/pusht_image_dataset.py`
-* `diffusion_policy/env_runner/pusht_image_runner.py`
-* `diffusion_policy/config/task/pusht_image.yaml`
-
-Make sure that `shape_meta` correspond to input and output shapes for your task. Make sure `env_runner._target_` and `dataset._target_` point to the new classes you have added. When training, add `task=<your_task_name>` to `train.py`'s arguments.
 
 ## 🩹 Adding a Method
 Read and imitate:
