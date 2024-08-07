@@ -1,29 +1,28 @@
-# Diffusion Policy
-
-[[Project page]](https://diffusion-policy.cs.columbia.edu/)
-[[Paper]](https://diffusion-policy.cs.columbia.edu/#paper)
-[[Data]](https://diffusion-policy.cs.columbia.edu/data/)
-[[Colab (state)]](https://colab.research.google.com/drive/1gxdkgRVfM55zihY9TFLja97cSVZOZq2B?usp=sharing)
-[[Colab (vision)]](https://colab.research.google.com/drive/18GIHeOQ5DyjMN8iIRZL2EKZ0745NLIpg?usp=sharing)
+# DiffuseLoco: Real-Time Legged Locomotion Control with Diffusion from Offline Datasets
 
 
-[Cheng Chi](http://cheng-chi.github.io/)<sup>1</sup>,
-[Siyuan Feng](https://www.cs.cmu.edu/~sfeng/)<sup>2</sup>,
-[Yilun Du](https://yilundu.github.io/)<sup>3</sup>,
-[Zhenjia Xu](https://www.zhenjiaxu.com/)<sup>1</sup>,
-[Eric Cousineau](https://www.eacousineau.com/)<sup>2</sup>,
-[Benjamin Burchfiel](http://www.benburchfiel.com/)<sup>2</sup>,
-[Shuran Song](https://www.cs.columbia.edu/~shurans/)<sup>1</sup>
+[[Paper]](https://arxiv.org/abs/2404.19264)
 
-<sup>1</sup>Columbia University,
-<sup>2</sup>Toyota Research Institute,
-<sup>3</sup>MIT
 
-<img src="media/teaser.png" alt="drawing" width="100%"/>
-<img src="media/multimodal_sim.png" alt="drawing" width="100%"/>
 
-## 🛝 Try it out!
-Our self-contained Google Colab notebooks is the easiest way to play with Diffusion Policy. We provide separate notebooks for  [state-based environment](https://colab.research.google.com/drive/1gxdkgRVfM55zihY9TFLja97cSVZOZq2B?usp=sharing) and [vision-based environment](https://colab.research.google.com/drive/18GIHeOQ5DyjMN8iIRZL2EKZ0745NLIpg?usp=sharing).
+
+[Xiaoyu Huang](http://cheng-chi.github.io/)<sup>1</sup>,
+[Yufeng Chi](https://www.cs.cmu.edu/~sfeng/)<sup>1</sup>,
+[Ruofeng Wang](https://yilundu.github.io/)<sup>1</sup>,
+[Zhongyu Li](https://www.zhenjiaxu.com/)<sup>1</sup>,
+[Xuebin Peng](https://www.eacousineau.com/)<sup>2</sup>,
+[Sophia Shao](http://www.benburchfiel.com/)<sup>1</sup>,
+[Borivoje Nikolic](https://www.cs.columbia.edu/~shurans/)<sup>1</sup>
+[Koushil Sreenath](https://www.cs.columbia.edu/~shurans/)<sup>1</sup>
+
+
+<sup>1</sup>UC Berkeley,
+<sup>2</sup>Simon Fraser University
+
+<!-- <img src="media/teaser.png" alt="drawing" width="100%"/>
+<img src="media/multimodal_sim.png" alt="drawing" width="100%"/> -->
+
+
 
 ## 🧾 Checkout our experiment logs!
 For each experiment used to generate Table I,II and IV in the [paper](https://diffusion-policy.cs.columbia.edu/#paper), we provide:
@@ -81,48 +80,19 @@ but you can use conda as well:
 $ conda env create -f conda_environment.yaml
 ```
 
-The `conda_environment_macos.yaml` file is only for development on MacOS and does not have full support for benchmarks.
+
 
 ### 🦾 Real Robot
 Hardware (for Push-T):
-* 1x [UR5-CB3](https://www.universal-robots.com/cb3) or [UR5e](https://www.universal-robots.com/products/ur5-robot/) ([RTDE Interface](https://www.universal-robots.com/articles/ur/interface-communication/real-time-data-exchange-rtde-guide/) is required)
-* 2x [RealSense D415](https://www.intelrealsense.com/depth-camera-d415/)
-* 1x [3Dconnexion SpaceMouse](https://3dconnexion.com/us/product/spacemouse-wireless/) (for teleop)
-* 1x [Millibar Robotics Manual Tool Changer](https://www.millibar.com/manual-tool-changer/) (only need robot side)
-* 1x 3D printed [End effector](https://cad.onshape.com/documents/a818888644a15afa6cc68ee5/w/2885b48b018cda84f425beca/e/3e8771c2124cee024edd2fed?renderMode=0&uiState=63ffcba6631ca919895e64e5)
-* 1x 3D printed [T-block](https://cad.onshape.com/documents/f1140134e38f6ed6902648d5/w/a78cf81827600e4ff4058d03/e/f35f57fb7589f72e05c76caf?renderMode=0&uiState=63ffcbc9af4a881b344898ee)
-* USB-C cables and screws for RealSense
+* 1x [CyberDog](https://in.event.mi.com/in/cyberdog)
+
 
 Software:
-* Ubuntu 20.04.3 (tested)
-* Mujoco dependencies: 
-`sudo apt install libosmesa6-dev libgl1-mesa-glx libglfw3 patchelf`
-* [RealSense SDK](https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md)
-* Spacemouse dependencies: 
-`sudo apt install libspnav-dev spacenavd; sudo systemctl start spacenavd`
+* Ubuntu 22.04
+* IssacGym
 * Conda environment `mamba env create -f conda_environment_real.yaml`
 
 ## 🖥️ Reproducing Simulation Benchmark Results 
-### Download Training Data
-Under the repo root, create data subdirectory:
-```console
-[diffusion_policy]$ mkdir data && cd data
-```
-
-Download the corresponding zip file from [https://diffusion-policy.cs.columbia.edu/data/training/](https://diffusion-policy.cs.columbia.edu/data/training/)
-```console
-[data]$ wget https://diffusion-policy.cs.columbia.edu/data/training/pusht.zip
-```
-
-Extract training data:
-```console
-[data]$ unzip pusht.zip && rm -f pusht.zip && cd ..
-```
-
-Grab config file for the corresponding experiment:
-```console
-[diffusion_policy]$ wget -O image_pusht_diffusion_policy_cnn.yaml https://diffusion-policy.cs.columbia.edu/data/experiments/image/pusht/diffusion_policy_cnn/config.yaml
-```
 
 ### Running for a single seed
 Activate conda environment and login to [wandb](https://wandb.ai) (if you haven't already).
@@ -160,48 +130,8 @@ data/outputs/2023.03.01/20.02.03_train_diffusion_unet_hybrid_pusht_image
 3 directories, 13 files
 ```
 
-### Running for multiple seeds
-Launch local ray cluster. For large scale experiments, you might want to setup an [AWS cluster with autoscaling](https://docs.ray.io/en/master/cluster/vms/user-guides/launching-clusters/aws.html). All other commands remain the same.
-```console
-(robodiff)[diffusion_policy]$ export CUDA_VISIBLE_DEVICES=0,1,2  # select GPUs to be managed by the ray cluster
-(robodiff)[diffusion_policy]$ ray start --head --num-gpus=3
-```
 
-Launch a ray client which will start 3 training workers (3 seeds) and 1 metrics monitor worker.
-```console
-(robodiff)[diffusion_policy]$ python ray_train_multirun.py --config-dir=. --config-name=image_pusht_diffusion_policy_cnn.yaml --seeds=42,43,44 --monitor_key=test/mean_score -- multi_run.run_dir='data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}' multi_run.wandb_name_base='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}'
-```
 
-In addition to the wandb log written by each training worker individually, the metrics monitor worker will log to wandb project `diffusion_policy_metrics` for the metrics aggregated from all 3 training runs. Local config, logs and checkpoints will be written to `data/outputs/yyyy.mm.dd/hh.mm.ss_<method_name>_<task_name>` in a directory structure identical to our [training logs](https://diffusion-policy.cs.columbia.edu/data/experiments/):
-```console
-(robodiff)[diffusion_policy]$ tree data/outputs/2023.03.01/22.13.58_train_diffusion_unet_hybrid_pusht_image -I 'wandb|media'
-data/outputs/2023.03.01/22.13.58_train_diffusion_unet_hybrid_pusht_image
-├── config.yaml
-├── metrics
-│   ├── logs.json.txt
-│   ├── metrics.json
-│   └── metrics.log
-├── train_0
-│   ├── checkpoints
-│   │   ├── epoch=0000-test_mean_score=0.174.ckpt
-│   │   └── latest.ckpt
-│   ├── logs.json.txt
-│   └── train.log
-├── train_1
-│   ├── checkpoints
-│   │   ├── epoch=0000-test_mean_score=0.131.ckpt
-│   │   └── latest.ckpt
-│   ├── logs.json.txt
-│   └── train.log
-└── train_2
-    ├── checkpoints
-    │   ├── epoch=0000-test_mean_score=0.105.ckpt
-    │   └── latest.ckpt
-    ├── logs.json.txt
-    └── train.log
-
-7 directories, 16 files
-```
 ### 🆕 Evaluate Pre-trained Checkpoints
 Download a checkpoint from the published training log folders, such as [https://diffusion-policy.cs.columbia.edu/data/experiments/low_dim/pusht/diffusion_policy_cnn/train_0/checkpoints/epoch=0550-test_mean_score=0.969.ckpt](https://diffusion-policy.cs.columbia.edu/data/experiments/low_dim/pusht/diffusion_policy_cnn/train_0/checkpoints/epoch=0550-test_mean_score=0.969.ckpt).
 
@@ -370,68 +300,6 @@ To maximize evaluation speed, we usually vectorize environments using our modifi
 
 ⚠️ Since subprocesses are launched using `fork` on linux, you need to be specially careful for environments that creates its OpenGL context during initialization (e.g. robosuite) which, once inherited by the child process memory space, often causes obscure bugs like segmentation fault. As a workaround, you can provide a `dummy_env_fn` that constructs an environment without initializing OpenGL.
 
-### `ReplayBuffer`
-The [`ReplayBuffer`](./diffusion_policy/common/replay_buffer.py) is a key data structure for storing a demonstration dataset both in-memory and on-disk with chunking and compression. It makes heavy use of the [`zarr`](https://zarr.readthedocs.io/en/stable/index.html) format but also has a `numpy` backend for lower access overhead.
 
-On disk, it can be stored as a nested directory (e.g. `data/pusht_cchi_v7_replay.zarr`) or a zip file (e.g. `data/robomimic/datasets/square/mh/image_abs.hdf5.zarr.zip`).
 
-Due to the relative small size of our datasets, it's often possible to store the entire image-based dataset in RAM with [`Jpeg2000` compression](./diffusion_policy/codecs/imagecodecs_numcodecs.py) which eliminates disk IO during training at the expense increasing of CPU workload.
 
-Example:
-```
-data/pusht_cchi_v7_replay.zarr
- ├── data
- │   ├── action (25650, 2) float32
- │   ├── img (25650, 96, 96, 3) float32
- │   ├── keypoint (25650, 9, 2) float32
- │   ├── n_contacts (25650, 1) float32
- │   └── state (25650, 5) float32
- └── meta
-     └── episode_ends (206,) int64
-```
-
-Each array in `data` stores one data field from all episodes concatenated along the first dimension (time). The `meta/episode_ends` array stores the end index for each episode along the fist dimension.
-
-### `SharedMemoryRingBuffer`
-The [`SharedMemoryRingBuffer`](./diffusion_policy/shared_memory/shared_memory_ring_buffer.py) is a lock-free FILO data structure used extensively in our [real robot implementation](./diffusion_policy/real_world) to utilize multiple CPU cores while avoiding pickle serialization and locking overhead for `multiprocessing.Queue`. 
-
-As an example, we would like to get the most recent `To` frames from 5 RealSense cameras. We launch 1 realsense SDK/pipeline per process using [`SingleRealsense`](./diffusion_policy/real_world/single_realsense.py), each continuously writes the captured images into a `SharedMemoryRingBuffer` shared with the main process. We can very quickly get the last `To` frames in the main process due to the FILO nature of `SharedMemoryRingBuffer`.
-
-We also implemented [`SharedMemoryQueue`](./diffusion_policy/shared_memory/shared_memory_queue.py) for FIFO, which is used in [`RTDEInterpolationController`](./diffusion_policy/real_world/rtde_interpolation_controller.py).
-
-### `RealEnv`
-In contrast to [OpenAI Gym](https://gymnasium.farama.org/), our polices interact with the environment asynchronously. In [`RealEnv`](./diffusion_policy/real_world/real_env.py), the `step` method in `gym` is split into two methods: `get_obs` and `exec_actions`. 
-
-The `get_obs` method returns the latest observation from `SharedMemoryRingBuffer` as well as their corresponding timestamps. This method can be call at any time during an evaluation episode.
-
-The `exec_actions` method accepts a sequence of actions and timestamps for the expected time of execution for each step. Once called, the actions are simply enqueued to the `RTDEInterpolationController`, and the method returns without blocking for execution.
-
-## 🩹 Adding a Task
-Read and imitate:
-* `diffusion_policy/dataset/pusht_image_dataset.py`
-* `diffusion_policy/env_runner/pusht_image_runner.py`
-* `diffusion_policy/config/task/pusht_image.yaml`
-
-Make sure that `shape_meta` correspond to input and output shapes for your task. Make sure `env_runner._target_` and `dataset._target_` point to the new classes you have added. When training, add `task=<your_task_name>` to `train.py`'s arguments.
-
-## 🩹 Adding a Method
-Read and imitate:
-* `diffusion_policy/workspace/train_diffusion_unet_image_workspace.py`
-* `diffusion_policy/policy/diffusion_unet_image_policy.py`
-* `diffusion_policy/config/train_diffusion_unet_image_workspace.yaml`
-
-Make sure your workspace yaml's `_target_` points to the new workspace class you created.
-
-## 🏷️ License
-This repository is released under the MIT license. See [LICENSE](LICENSE) for additional details.
-
-## 🙏 Acknowledgement
-* Our [`ConditionalUnet1D`](./diffusion_policy/model/diffusion/conditional_unet1d.py) implementation is adapted from [Planning with Diffusion](https://github.com/jannerm/diffuser).
-* Our [`TransformerForDiffusion`](./diffusion_policy/model/diffusion/transformer_for_diffusion.py) implementation is adapted from [MinGPT](https://github.com/karpathy/minGPT).
-* The [BET](./diffusion_policy/model/bet) baseline is adapted from [its original repo](https://github.com/notmahi/bet).
-* The [IBC](./diffusion_policy/policy/ibc_dfo_lowdim_policy.py) baseline is adapted from [Kevin Zakka's reimplementation](https://github.com/kevinzakka/ibc).
-* The [Robomimic](https://github.com/ARISE-Initiative/robomimic) tasks and [`ObservationEncoder`](https://github.com/ARISE-Initiative/robomimic/blob/master/robomimic/models/obs_nets.py) are used extensively in this project.
-* The [Push-T](./diffusion_policy/env/pusht) task is adapted from [IBC](https://github.com/google-research/ibc).
-* The [Block Pushing](./diffusion_policy/env/block_pushing) task is adapted from [BET](https://github.com/notmahi/bet) and [IBC](https://github.com/google-research/ibc).
-* The [Kitchen](./diffusion_policy/env/kitchen) task is adapted from [BET](https://github.com/notmahi/bet) and [Relay Policy Learning](https://github.com/google-research/relay-policy-learning).
-* Our [shared_memory](./diffusion_policy/shared_memory) data structures are heavily inspired by [shared-ndarray2](https://gitlab.com/osu-nrsg/shared-ndarray2).
