@@ -11,7 +11,7 @@ from diffusion_policy.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
 from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
 # from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
-from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
+
 
 from diffusion_policy.policy.base_lowdim_policy import BaseLowdimPolicy
 from diffusion_policy.common.pytorch_util import dict_apply
@@ -153,8 +153,9 @@ class LeggedRunner(BaseLowdimRunner):
                 # if idx % skip == 4: #not save_zarr and 
                 if online:    
                     # if idx < 200:
-                    state_history[:, -policy.n_obs_steps-1:-1, 6:9]  = 0.
-                    state_history[:, -policy.n_obs_steps-1:-1, 6] = 0.5
+                    state_history[:, -policy.n_obs_steps-1:-1, 6:9] = 0
+                    state_history[:, -policy.n_obs_steps-1:-1, 6] = 0#-0.5
+                    state_history[:, -policy.n_obs_steps-1:-1, 7] = 0
                     # print(state_history[:, :, :])
                     obs_dict = {"obs": state_history[:, -policy.n_obs_steps-1:-1, :]}
                     t1 = time.perf_counter()
@@ -250,44 +251,6 @@ class LeggedRunner(BaseLowdimRunner):
         # clear out video buffer
         _ = env.reset()
         
-        
-        # # log
-        # log_data = dict()
-        # log_data['eval_action_error'] = torch.mean(torch.tensor(action_error))
-        # print("eval_action_error: ", log_data['eval_action_error'])
-
-        # with torch.no_grad():
-        #     batch = {}
-        #     dataset = zarr.open(file_name, "r")
-        #     # sample trajectory from training set, and evaluate difference
-        #     obs = dataset.data.state
-        #     actions = dataset.data.action
-        #     episode_indices = np.concatenate([np.array([np.arange(i, i + policy.horizon) for i in range(j*100, j*100+20)]) for j in range(10)])
-        #     episode_indices = episode_indices.flatten()
-        #     obs = obs[episode_indices].reshape(-1, policy.horizon, obs.shape[-1])
-        #     actions = actions[episode_indices].reshape(-1, policy.horizon, actions.shape[-1])
-            
-        #     batch["obs"] = obs
-        #     batch["action"] = actions
-        #     batch = dict_apply(batch, torch.from_numpy)
-        #     batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
-        #     obs_dict = {"obs": batch["obs"]}
-        #     gt_action = batch["action"]
-            
-        #     result = policy.predict_action(obs_dict)
-
-        #     pred_action = result["action_pred"]
-        #     mse = torch.nn.functional.mse_loss(pred_action, gt_action)
-            
-        #     print("eval mse: ", mse.item(), np.sqrt(mse.item()))
-        #     # release RAM
-        #     del batch
-        #     del obs_dict
-        #     del gt_action
-        #     del result
-        #     del pred_action
-        #     del mse
-
 
         return file_name
 

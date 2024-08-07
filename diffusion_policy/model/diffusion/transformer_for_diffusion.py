@@ -335,6 +335,9 @@ class TransformerForDiffusion(ModuleAttrMixin):
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
         timesteps = timesteps.expand(sample.shape[0])
         time_emb = self.time_emb(timesteps).unsqueeze(1)
+
+        if sample.dtype == torch.float16:
+            time_emb = time_emb.half()
         # (B,1,n_emb)
 
         # process input
